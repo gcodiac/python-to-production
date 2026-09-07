@@ -142,6 +142,12 @@ def delete_note(note_id: int):
         connection.close()
 
 
+@app.get("/health")
+def health_check():
+    """Basic liveness/readiness signal for load balancers, orchestrators, etc."""
+    return {"status": "ok", "environment": APP_ENV}
+
+
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="dashboard")
 
