@@ -62,4 +62,18 @@ USER 1000:1000
 
 EXPOSE 8000
 
+# Uses the Stage 1 /health endpoint - see
+# container-learning/11-health-signals-and-container-lifecycle.md. No curl
+# in this image (adding it just for a health probe would be its own
+# needless attack surface); Python is already here, so it does the HTTP
+# GET directly. A non-2xx response or connection failure raises, which
+# gives this a non-zero exit code - exactly what Docker expects.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+
+# Exec form (a JSON array, not a bare string) - see
+# container-learning/14-signals-and-graceful-shutdown.md. Shell-form CMD
+# would run as a child of /bin/sh -c, which becomes PID 1 instead of
+# uvicorn, and `docker stop`'s SIGTERM would hit the shell rather than the
+# process that actually needs to shut down gracefully.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
