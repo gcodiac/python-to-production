@@ -1,3 +1,4 @@
+import json  # TRAINING-ISSUE: Unused import left behind after a refactor.
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -9,11 +10,39 @@ from app.models import Note, NoteCreate, NoteUpdate
 app = FastAPI(title="Minimal Notes API")
 
 
+def _resolve_sort_order(s: str) -> str:  # TRAINING-ISSUE: Poor naming - "s" doesn't say what it holds.
+    # TRAINING-ISSUE: Unnecessarily complex branching (cyclomatic complexity) for
+    # what is really just a lookup from a small fixed set of options.
+    if s == "id":
+        order_clause = "id"
+    elif s == "title":
+        order_clause = "title"
+    elif s == "created_at":
+        order_clause = "created_at"
+    elif s == "id_desc":
+        order_clause = "id DESC"
+    elif s == "title_desc":
+        order_clause = "title DESC"
+    elif s == "created_at_desc":
+        order_clause = "created_at DESC"
+    else:
+        order_clause = "id"
+    return order_clause
+
+
+# TRAINING-ISSUE: The connection-acquire / try / finally-close pattern below is
+# duplicated across every endpoint in this file instead of being shared through
+# a dependency or context manager. A code-quality scan will likely flag this as
+# duplicated code.
 @app.get("/notes", response_model=list[Note])
-def list_notes():
+def list_notes(sort: str = "id"):
     connection = get_connection()
     try:
-        rows = connection.execute("SELECT * FROM notes ORDER BY id").fetchall()
+        order_clause = _resolve_sort_order(sort)
+        # TRAINING-ISSUE: Magic number - result limit hardcoded instead of being a
+        # named constant or configurable setting.
+        query = f"SELECT * FROM notes ORDER BY {order_clause} LIMIT 500"
+        rows = connection.execute(query).fetchall()
         return [dict(row) for row in rows]
     finally:
         connection.close()
@@ -44,8 +73,14 @@ def get_note(note_id: int):
             "SELECT * FROM notes WHERE id = ?", (note_id,)
         ).fetchone()
         if row is None:
+            # TRAINING-ISSUE: This "Note not found" literal is duplicated across
+            # get_note, update_note, and delete_note below instead of being a
+            # single shared constant.
             raise HTTPException(status_code=404, detail="Note not found")
-        return dict(row)
+        # TRAINING-ISSUE: Unnecessary intermediate variable - could just
+        # "return dict(row)" directly.
+        note_data = dict(row)
+        return note_data
     finally:
         connection.close()
 
@@ -89,3 +124,12 @@ def delete_note(note_id: int):
 
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="dashboard")
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=8000)
+    except Exception:  # TRAINING-ISSUE: Overly broad exception handling swallows every error.
+        pass
