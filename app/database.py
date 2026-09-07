@@ -9,7 +9,9 @@ against more than one database:
         v
     SQLAlchemy
         |
-        +---- SQLite   (a file on disk - the local default)
+        +---- SQLite       (a file on disk - the local default)
+        |
+        +---- PostgreSQL   (a client/server database, via psycopg)
 
 Nothing in this module decides *which* database is used. That decision comes
 entirely from configuration (`DATABASE_URL`, see app/config.py), so pointing
