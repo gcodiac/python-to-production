@@ -32,7 +32,7 @@ RUN pip install --no-cache-dir --no-deps . \
 
 FROM python:3.12.14-slim-bookworm
 
-# OCI image metadata - see container-learning/25-oci-image-metadata.md.
+# OCI image metadata - see container-learning/24-oci-image-metadata-and-the-software-supply-chain.md.
 # GIT_REVISION is a build ARG, not a LABEL baked in statically, because it's
 # only known at build time: docker build --build-arg GIT_REVISION=$(git rev-parse --short HEAD) ...
 # No org.opencontainers.image.source label - that would need a real,
@@ -102,7 +102,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
 
 # Exec form (a JSON array, not a bare string) - see
-# container-learning/14-signals-and-graceful-shutdown.md. Shell-form CMD
+# container-learning/15-signals-and-graceful-shutdown.md. Shell-form CMD
 # would run as a child of /bin/sh -c, which becomes PID 1 instead of
 # uvicorn, and `docker stop`'s SIGTERM would hit the shell rather than the
 # process that actually needs to shut down gracefully.
