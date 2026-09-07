@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Notes Dashboard</title>
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<div class="container">
+  <header class="dashboard-header">
+    <h1>📝 Notes</h1>
+    <p>A minimal glassmorphic dashboard for the Notes API.</p>
+  </header>
+
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-value" id="stat-total">0</div>
+      <div class="stat-label">Total notes</div>
+    </div>
+  </div>
+
+  <section class="panel">
+    <h2 id="form-title">New note</h2>
+    <form id="note-form">
+      <input type="hidden" id="note-id" />
+      <div class="field">
+        <label for="note-title">Title</label>
+        <input type="text" id="note-title" placeholder="Groceries" required />
+      </div>
+      <div class="field">
+        <label for="note-content">Content</label>
+        <textarea id="note-content" rows="3" placeholder="Milk, eggs..."></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="primary" id="submit-btn">Add note</button>
+        <button type="button" class="ghost" id="cancel-btn" style="display: none;">Cancel</button>
+      </div>
+    </form>
+  </section>
+
+  <section>
+    <div class="items-grid" id="items-grid"></div>
+    <div class="empty-state" id="empty-state" style="display: none;">No notes yet. Add your first one above.</div>
+  </section>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>
