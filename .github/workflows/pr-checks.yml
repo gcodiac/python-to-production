@@ -1,0 +1,57 @@
+name: PR Checks
+
+# Automates the exact manual quality gate Stage 2 already taught -
+# see cicd-learning/02-pull-request-quality-gates.md and
+# cicd-learning/03-security-and-dependency-gates.md. Nothing here is new
+# logic; it's the same pytest/ruff/bandit/pip-audit commands, just
+# triggered automatically instead of by hand.
+
+on:
+  pull_request:
+    branches:
+      - devops/02-containerisation-supply-chain
+      - main
+
+# Least privilege: this workflow only ever reads the repository. It never
+# publishes anything, so it never needs packages/id-token/attestations
+# permissions - see cicd-learning/11-cicd-secrets-permissions-and-oidc.md.
+permissions:
+  contents: read
+
+# A PR that gets five quick pushes doesn't need four obsolete validation
+# runs still consuming runners - cancel superseded runs for the same PR.
+concurrency:
+  group: pr-checks-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Cheapest, fastest checks first - fail fast before spending time on a
+  # Docker build. See cicd-learning/01-ci-cd-and-pipeline-triggers.md.
+  quality-and-security:
+    name: Lint, test, and source security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install project (with dev tooling)
+        run: pip install -e ".[dev]" pip-audit
+
+      - name: Ruff (code quality)
+        run: ruff check app/
+
+      - name: pytest
+        run: pytest
+
+      - name: Bandit (source security patterns)
+        run: bandit -r app/
+
+      - name: pip-audit (known-vulnerable dependencies)
+        run: |
+          pip-audit -r requirements.txt
+          pip-audit -r requirements-dev.txt
