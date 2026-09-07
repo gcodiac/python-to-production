@@ -10,12 +10,18 @@ dist/
 .venv/
 venv/
 
+# Environment configuration (created during the DevOps learning track)
+.env
+.env.*
+!.env.example
+
 # SQLite database files created by running the app
 *.db
 *.db-journal
 
-# Test / coverage artefacts
+# Test / coverage / lint artefacts
 .pytest_cache/
+.ruff_cache/
 .coverage
 htmlcov/
 
@@ -24,6 +30,6 @@ htmlcov/
 .idea/
 .DS_Store
 
-# Local reference/teaching material - not part of the project history
+# Local reference/teaching material - not part of this branch's history
 /original/
 /learning/
