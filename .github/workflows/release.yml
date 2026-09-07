@@ -116,6 +116,22 @@ jobs:
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
           echo "Published digest: ${DIGEST}"
 
+      # The SBOM corresponds to the exact published digest, not just "the
+      # image built from this commit" - see
+      # cicd-learning/08-sboms-and-release-artifacts.md.
+      - name: Generate SBOM for the published image
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          image: ${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom-${{ steps.vars.outputs.short_sha }}
+          path: sbom.cdx.json
+          retention-days: 30
+
       - name: Summary
         run: |
           echo "### Release published" >> "$GITHUB_STEP_SUMMARY"
