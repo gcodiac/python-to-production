@@ -5,6 +5,8 @@ when an application moves between environments: turning configuration into
 the right engine, with the right options, for the right backend.
 """
 
+import pytest
+
 from app import config
 from app.database import (
     create_database_engine,
@@ -58,3 +60,99 @@ def test_describe_url_never_reveals_the_password():
     described = describe_url(POSTGRES_URL)
     assert "not-a-real-password" not in described
     assert "localhost:5432/notes" in described
+
+# --- Configuration precedence ----------------------------------------------
+#
+# The application accepts either a complete DATABASE_URL or the individual
+# DB_* components. These tests pin down which one wins, because "which
+# setting was actually in effect?" is one of the most expensive questions to
+# answer during an incident.
+
+
+@pytest.fixture
+def db_env(monkeypatch):
+    """Clear every database variable, then let a test set the ones it cares about."""
+    for name in (
+        "DATABASE_URL",
+        "DB_HOST",
+        "DB_PORT",
+        "DB_NAME",
+        "DB_USER",
+        "DB_SSLMODE",
+        "DB_PASSWORD",
+        "DB_PASSWORD_FILE",
+    ):
+        monkeypatch.setattr(config, name, None, raising=False)
+    monkeypatch.setattr(config, "DB_PORT", 5432)
+    monkeypatch.setattr(config, "DB_NAME", "notes")
+    monkeypatch.setattr(config, "DB_USER", "notes")
+    return monkeypatch
+
+
+def test_no_configuration_falls_back_to_sqlite(db_env):
+    assert config.database_url() == config.DEFAULT_DATABASE_URL
+
+
+def test_database_url_is_used_verbatim(db_env):
+    db_env.setattr(config, "DATABASE_URL", SQLITE_URL)
+    assert config.database_url() == SQLITE_URL
+
+
+def test_database_url_wins_over_components(db_env):
+    """An explicit URL is never quietly overridden by leftover DB_* variables."""
+    db_env.setattr(config, "DATABASE_URL", SQLITE_URL)
+    db_env.setattr(config, "DB_HOST", "db.example.internal")
+    db_env.setattr(config, "DB_PASSWORD", "unused")
+    assert config.database_url() == SQLITE_URL
+
+
+def test_components_build_a_postgres_url(db_env):
+    db_env.setattr(config, "DB_HOST", "db.example.internal")
+    db_env.setattr(config, "DB_PASSWORD", "s3cret")
+
+    url = config.database_url()
+    assert url.get_backend_name() == "postgresql"
+    assert url.host == "db.example.internal"
+    assert url.port == 5432
+    assert url.database == "notes"
+    assert url.password == "s3cret"
+
+
+def test_reserved_characters_in_the_password_survive(db_env):
+    """The exact bug hand-built URL strings introduce: '@' splits the host off."""
+    db_env.setattr(config, "DB_HOST", "db.example.internal")
+    db_env.setattr(config, "DB_PASSWORD", "p@ss:w/rd?")
+
+    url = config.database_url()
+    assert url.password == "p@ss:w/rd?"
+    assert url.host == "db.example.internal"
+
+
+def test_password_file_is_preferred_over_the_variable(db_env, tmp_path):
+    secret = tmp_path / "db_password"
+    secret.write_text("from-the-file\n", encoding="utf-8")
+
+    db_env.setattr(config, "DB_HOST", "db.example.internal")
+    db_env.setattr(config, "DB_PASSWORD", "from-the-variable")
+    db_env.setattr(config, "DB_PASSWORD_FILE", str(secret))
+
+    assert config.read_db_password() == "from-the-file"
+    assert config.database_url().password == "from-the-file"
+
+
+def test_sslmode_is_only_added_when_asked_for(db_env):
+    db_env.setattr(config, "DB_HOST", "db.example.internal")
+    db_env.setattr(config, "DB_PASSWORD", "s3cret")
+    assert "sslmode" not in config.database_url().query
+
+    db_env.setattr(config, "DB_SSLMODE", "require")
+    assert config.database_url().query["sslmode"] == "require"
+
+
+def test_missing_password_fails_loudly(db_env):
+    """Half-configured is worse than unconfigured, so it must not be tolerated."""
+    db_env.setattr(config, "DB_HOST", "db.example.internal")
+
+    with pytest.raises(config.ConfigurationError) as excinfo:
+        config.database_url()
+    assert "DB_PASSWORD_FILE" in str(excinfo.value)

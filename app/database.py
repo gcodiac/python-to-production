@@ -131,7 +131,14 @@ def get_engine() -> Engine:
     global _engine
 
     if _engine is None:
-        engine = create_database_engine()
+        try:
+            engine = create_database_engine()
+        except config.ConfigurationError as exc:
+            # Incomplete configuration is not a different kind of problem to
+            # an unreachable database, as far as a caller is concerned: the
+            # application cannot serve requests either way.
+            raise DatabaseUnavailableError(str(exc)) from exc
+
         try:
             metadata.create_all(engine)
         except SQLAlchemyError as exc:
