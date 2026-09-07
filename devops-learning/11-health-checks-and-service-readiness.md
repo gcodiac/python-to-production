@@ -40,7 +40,7 @@ curl -s http://127.0.0.1:8000/health
 Stop the app (`kill %1` or `Ctrl+C`), then start it again pointing at a database path whose directory doesn't exist:
 
 ```bash
-NOTES_DB_PATH=/nonexistent-dir-xyz/notes.db uvicorn app.main:app --port 8001 &
+DATABASE_URL=sqlite:////nonexistent-dir-xyz/notes.db uvicorn app.main:app --port 8001 &
 sleep 1
 curl -i http://127.0.0.1:8001/health
 ```
@@ -64,7 +64,7 @@ Watch the terminal running Uvicorn — you should see a full Python traceback pr
 
 ```bash
 grep -n -A3 "def health_check" app/main.py
-NOTES_DB_PATH=/nonexistent-dir-xyz/notes.db uvicorn app.main:app --port 8001 &
+DATABASE_URL=sqlite:////nonexistent-dir-xyz/notes.db uvicorn app.main:app --port 8001 &
 curl -i http://127.0.0.1:8001/health
 curl -i http://127.0.0.1:8001/notes
 kill %1

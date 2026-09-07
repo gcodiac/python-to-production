@@ -67,6 +67,8 @@ head -5 app/static/app.js
 
 The app uses Python's built-in `sqlite3` module, meaning the database technology is **SQLite** — a single-file, serverless database. The file path comes from an environment variable `NOTES_DB_PATH`, falling back to `notes.db` in the current working directory if that variable isn't set. The browser never talks to SQLite directly — it only ever calls the FastAPI process over HTTP (both for the API and for the dashboard's HTML/CSS/JS), and the FastAPI process is the only thing that opens the database file.
 
+That is the architecture *as inherited*. By the end of this track the storage layer is no longer wired to one specific database — see [Lesson 12](12-designing-for-database-portability.md), where the same application becomes able to run on either SQLite or PostgreSQL through configuration alone.
+
 ## Practical exercise
 
 Draw (in text, ASCII, or on paper) your own version of this diagram, labelling each arrow with what actually flows across it (HTTP requests, JSON, SQL, or file reads):
