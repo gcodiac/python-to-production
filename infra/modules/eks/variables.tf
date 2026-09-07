@@ -73,6 +73,12 @@ variable "enable_github_access" {
   default     = true
 }
 
+variable "github_deploy_kubernetes_group" {
+  description = "Kubernetes group the GitHub deploy principal is placed in, so namespace RBAC can be bound to it."
+  type        = string
+  default     = "notes-app-deployers"
+}
+
 variable "github_deploy_role_arn" {
   description = "IAM role ARN used by GitHub Actions, granted namespace-scoped Kubernetes access. Null disables the access entry."
   type        = string

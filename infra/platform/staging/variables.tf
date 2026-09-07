@@ -33,3 +33,9 @@ variable "aws_provider_chart_version" {
   type        = string
   default     = "3.1.3"
 }
+
+variable "github_deploy_kubernetes_group" {
+  description = "Kubernetes group containing the GitHub deploy principal (set by the EKS access entry)."
+  type        = string
+  default     = "notes-app-deployers"
+}

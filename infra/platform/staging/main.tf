@@ -48,6 +48,52 @@ resource "kubernetes_namespace_v1" "app" {
   }
 }
 
+# --- RBAC for the GitHub deploy identity -----------------------------------
+#
+# The EKS access entry grants AmazonEKSEditPolicy on this namespace, which
+# covers built-in resources (Deployment, Service, Ingress, ConfigMap...) but
+# NOT custom resources. Deploying the application also creates a
+# SecretProviderClass, so without this the Helm release fails with:
+#
+#   secretproviderclasses.secrets-store.csi.x-k8s.io "notes-app-db" is
+#   forbidden: User "...assumed-role/notes-app-staging-github-deploy/..."
+#   cannot get resource "secretproviderclasses"
+#
+# Granting exactly this one CRD, in exactly this one namespace, is the
+# least-privilege fix - rather than promoting CI to cluster-admin.
+
+resource "kubernetes_role_v1" "deployer_crds" {
+  metadata {
+    name      = "notes-app-deployer-crds"
+    namespace = kubernetes_namespace_v1.app.metadata[0].name
+  }
+
+  rule {
+    api_groups = ["secrets-store.csi.x-k8s.io"]
+    resources  = ["secretproviderclasses"]
+    verbs      = ["get", "list", "watch", "create", "update", "patch", "delete"]
+  }
+}
+
+resource "kubernetes_role_binding_v1" "deployer_crds" {
+  metadata {
+    name      = "notes-app-deployer-crds"
+    namespace = kubernetes_namespace_v1.app.metadata[0].name
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Role"
+    name      = kubernetes_role_v1.deployer_crds.metadata[0].name
+  }
+
+  subject {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Group"
+    name      = var.github_deploy_kubernetes_group
+  }
+}
+
 # --- AWS Load Balancer Controller ------------------------------------------
 #
 #   Ingress  ->  AWS Load Balancer Controller  ->  real AWS ALB
