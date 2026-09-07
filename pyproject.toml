@@ -1,13 +1,18 @@
 [project]
 name = "notes-app"
 version = "0.1.0"
-description = "A minimal Notes API built with FastAPI and SQLite."
+description = "A minimal Notes API built with FastAPI, running on SQLite or PostgreSQL."
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "python-dotenv>=1.0",
     "sqlalchemy>=2.0",
+    # The PostgreSQL driver is a normal application dependency, not something
+    # bolted on at deployment time: an image that cannot talk to PostgreSQL
+    # until someone installs an extra package is not portable, it is broken
+    # in a way nobody notices until production.
+    "psycopg[binary]>=3.2",
 ]
 
 [project.optional-dependencies]
