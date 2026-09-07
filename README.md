@@ -33,14 +33,15 @@ The application therefore deliberately begins without:
 
 These are not missing features. They are intentionally left for the learning journey that begins after forking this repository.
 
-For the same reason, the application code also contains a small number of **deliberate** code-quality and configuration/security problems for the [devops-learning/](devops-learning/) track to find — hard-coded configuration, a fake placeholder secret, and a handful of realistic maintainability issues. Every one of them is marked in the source with a comment containing `TRAINING-ISSUE`, so you can always find the full list with `grep -rn "TRAINING-ISSUE" app/`. If you're working through [learning/](learning/) instead, you can ignore these entirely — they don't affect how the application runs.
+**This branch (`devops/01-pre-containerisation`) has since addressed several of them** as part of a completed pre-containerisation review: configuration (`APP_ENV`, `APP_HOST`, `APP_PORT`, `DATABASE_URL`, `LOG_LEVEL`, `APP_SECRET`) is now externalised via environment variables and `app/config.py` (see `.env.example`), and the application fails loudly rather than starting insecurely if `APP_SECRET` is missing in production. Earlier commits on this branch deliberately introduced a small set of code-quality and configuration/security problems for the [devops-learning/](devops-learning/) track to find, each originally marked with a comment containing `TRAINING-ISSUE`. If you want to work through that investigation yourself rather than see the finished result, check out an earlier commit on this branch (before the "Fix static analysis findings" commit) and run `grep -rn "TRAINING-ISSUE" app/` there — the lessons in [devops-learning/](devops-learning/) still describe that exercise in full. The current tip of this branch is the worked example of what completing it looks like.
 
 ## What this application contains
 
 * a small FastAPI application (`app/main.py`)
-* a simple Notes API (create, read, update, delete) plus a `/health` endpoint
+* a simple Notes API (create, read, update, delete) plus `/health` and `/ready` endpoints
 * a glassmorphic dashboard UI (`app/static/`) served at `/`, built with plain HTML/CSS/JS against the API — no frontend framework or build step
-* SQLite for local persistence (`app/database.py`)
+* a database-agnostic storage layer built on SQLAlchemy (`app/database.py`) — runs on SQLite *or* PostgreSQL, chosen by configuration
+* environment-based configuration (`app/config.py`, `.env.example`)
 * basic automated tests (`tests/test_notes.py`)
 * Python project configuration (`pyproject.toml`), including optional `ruff`/`bandit` dev tooling used by the DevOps track
 
@@ -51,16 +52,45 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 
+cp .env.example .env   # first time only - adjust values as needed
+
 uvicorn app.main:app --reload
 ```
 
 The dashboard is now available at `http://127.0.0.1:8000`. Interactive API docs are available at `http://127.0.0.1:8000/docs`.
+
+Configuration is read from environment variables (see `.env.example` for the full list) with safe local-development defaults, except `APP_SECRET`, which the app refuses to start without whenever `APP_ENV=production`.
+
+### Choosing a database
+
+The application talks to its database through SQLAlchemy, so one environment variable selects the backend — no code change, no separate build:
+
+```bash
+# SQLite (the default): a single file, nothing to install or start
+DATABASE_URL=sqlite:///./notes.db
+
+# PostgreSQL: requires a PostgreSQL server reachable at that address
+DATABASE_URL=postgresql+psycopg://notes:your-password@localhost:5432/notes
+```
+
+SQLite is the default on purpose. It needs no server, starts instantly, and keeps the test suite fast — it is the right tool for local development on an application this size. PostgreSQL exists as an equally supported option for anyone who wants to develop against the same kind of database a production deployment would use. Neither is the "correct" choice; the point is that the application does not care, and switching costs one line of configuration.
+
+`/ready` reports which backend it actually reached:
+
+```bash
+curl -s http://127.0.0.1:8000/ready
+# {"status":"ready","database":"sqlite"}
+```
+
+Where the password must not sit in a URL — a deployment reading it from a mounted secret, for example — the connection details can instead be supplied as `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` plus `DB_PASSWORD_FILE`. `DATABASE_URL` always takes precedence when both are present; see `.env.example` for the full precedence rules.
 
 ## Running the tests
 
 ```bash
 pytest
 ```
+
+The tests run against a throwaway SQLite database, so no PostgreSQL server is needed to run them. The PostgreSQL configuration is covered by tests that build engines without connecting to anything (`tests/test_database_config.py`).
 
 ## API
 
@@ -93,7 +123,7 @@ Local application
         ↓
 Understanding & analysing an inherited app   <- devops-learning/ covers this far
         ↓
-Application configuration                       (devops-learning/)
+Application configuration                       (devops-learning/ - complete on this branch)
         ↓
 Containerization                                 (a later track — not yet in this repo)
         ↓
