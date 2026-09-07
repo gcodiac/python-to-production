@@ -1,0 +1,56 @@
+# Local development/testing environment for the notes-app container.
+# See container-learning/12-docker-compose-for-local-running.md.
+#
+# The Dockerfile answers "how is the image built?" - this file answers
+# "how is a container from that image configured and run?" Two different
+# questions, two different files.
+#
+# Compose automatically reads a .env file in this directory for the
+# ${VAR} substitutions below - the same .env you created in Stage 1 with
+# `cp .env.example .env`. Notice APP_HOST and DATABASE_URL are NOT sourced
+# from it, though: those two need a different value inside a container than
+# they do running directly on your machine (see the comments below) - the
+# same config *key* does not always mean the same correct *value*.
+
+services:
+  notes-app:
+    build:
+      context: .
+    image: notes-app:local
+    ports:
+      # Host-side port is configurable (default 8000); the container always
+      # listens on 8000 internally - that's fixed by EXPOSE/CMD in the
+      # Dockerfile, not something a container consumer needs to change.
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      # Always 0.0.0.0 in a container, regardless of what .env says for
+      # bare-metal use: binding to 127.0.0.1 here would make the app
+      # unreachable through the port mapping above, because 127.0.0.1
+      # inside the container's network namespace isn't the same interface
+      # Docker forwards host traffic to.
+      APP_HOST: "0.0.0.0"
+      APP_PORT: "8000"
+      # Always the volume mount path below, not .env's bare-metal default -
+      # this is *this container's* persistent data location.
+      DATABASE_URL: "sqlite:////data/notes.db"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      APP_SECRET: ${APP_SECRET:-dev-only-secret-not-for-production}
+    volumes:
+      # Named volume, not a bind mount: the data must outlive this
+      # container being recreated, but doesn't need to be a specific path
+      # on the host - see container-learning/10-persistent-data-and-sqlite.md.
+      - notes-data:/data
+    healthcheck:
+      # Mirrors the image's own HEALTHCHECK. Defined again here mainly to
+      # show the syntax - a real project might tighten the interval for
+      # faster local feedback without needing to rebuild the image.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  notes-data:
