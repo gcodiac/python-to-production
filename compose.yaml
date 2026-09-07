@@ -41,6 +41,18 @@ services:
       # container being recreated, but doesn't need to be a specific path
       # on the host - see container-learning/10-persistent-data-and-sqlite.md.
       - notes-data:/data
+    # Runtime hardening - see container-learning/21-container-runtime-hardening.md.
+    # The question that matters here is "what does this app actually need
+    # permission to write?" - the answer is /data (mounted above, and
+    # unaffected by read_only: true since it's a separate volume mount) and
+    # nothing else.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       # Mirrors the image's own HEALTHCHECK. Defined again here mainly to
       # show the syntax - a real project might tighten the interval for
