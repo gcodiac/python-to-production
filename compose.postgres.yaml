@@ -1,0 +1,114 @@
+# Local development/testing environment for the notes-app container,
+# running against a real PostgreSQL server instead of a SQLite file.
+# See container-learning/13-running-on-sqlite-or-postgresql.md.
+#
+# This is the SECOND of two supported local topologies. compose.yaml is the
+# first, and neither replaces the other:
+#
+#   compose.yaml            notes-app  ->  /data/notes.db  ->  notes-data volume
+#   compose.postgres.yaml   notes-app  ->  postgres:5432   ->  postgres-data volume
+#
+# Deliberately a complete, standalone file rather than a Compose override
+# layered on top of compose.yaml. An override would remove perhaps fifteen
+# duplicated lines at the cost of making neither file readable on its own -
+# and being able to read one file top-to-bottom and know exactly what runs is
+# worth more here than avoiding duplication.
+#
+# Run it with:
+#   docker compose -f compose.postgres.yaml up --build
+#
+# The application image is IDENTICAL to the one compose.yaml builds - same
+# Dockerfile, same build context, same tag. Only configuration differs. There
+# is no "PostgreSQL build" of this application, and there must never be one.
+
+services:
+  notes-app:
+    build:
+      context: .
+    image: notes-app:local
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      # Same reasoning as compose.yaml: 127.0.0.1 inside a container is not
+      # reachable through the port mapping above.
+      APP_HOST: "0.0.0.0"
+      APP_PORT: "8000"
+      # The only line that meaningfully differs from compose.yaml.
+      #
+      # "postgres" is the Compose service name below, not a hostname anyone
+      # configured. Compose puts every service on a shared network and runs a
+      # DNS resolver on it, so service names resolve to container addresses.
+      #
+      # It is emphatically NOT "localhost": inside a container, localhost is
+      # that container itself, so localhost:5432 would try to reach a
+      # PostgreSQL server running inside the notes-app container. There isn't
+      # one, and there should not be one.
+      DATABASE_URL: "postgresql+psycopg://${POSTGRES_USER:-notes}:${POSTGRES_PASSWORD:-local-dev-only-change-me}@postgres:5432/${POSTGRES_DB:-notes}"
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      APP_SECRET: ${APP_SECRET:-dev-only-secret-not-for-production}
+    depends_on:
+      postgres:
+        # Wait for the health check below to pass, not merely for the
+        # container to start. See the note on the postgres healthcheck.
+        #
+        # This is a convenience, not a correctness guarantee: the database can
+        # still disappear later, while the app is running. Startup ordering is
+        # the easy half of the problem, which is why the application answers
+        # 503 from /ready rather than assuming the database is always there.
+        condition: service_healthy
+    # No /data volume here: this container stores nothing. All state lives in
+    # PostgreSQL, which is exactly what makes this topology the one that
+    # scales to more than one application instance.
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+
+  postgres:
+    # Pinned to an exact minor version, never `postgres:latest`. A database
+    # server that silently changes major version between two `docker compose
+    # up` runs is a genuinely bad afternoon - and "latest" is not even a
+    # moving target you control, it is whatever the registry says today.
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-notes}
+      POSTGRES_USER: ${POSTGRES_USER:-notes}
+      # A deliberately obvious throwaway default for local development only.
+      # It has no relationship to any real credential anywhere: not to a
+      # managed database, not to a secret store, not to anything in CI.
+      # Override it in your git-ignored .env if you like.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-dev-only-change-me}
+    volumes:
+      # The database's own persistent storage, entirely separate from the
+      # notes-data volume compose.yaml uses. Same principle as SQLite mode:
+      # the container is disposable, the volume is not.
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # pg_isready asks the server whether it is accepting connections.
+      # "The container is running" is a much weaker claim: PostgreSQL spends
+      # its first startup seconds initialising a data directory, during which
+      # the process exists and every connection attempt is refused.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-notes} -d ${POSTGRES_DB:-notes}"]
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  # Note the name: this is NOT notes-data. Switching between the two Compose
+  # files switches between two independent databases - notes created in one
+  # do not appear in the other. Portability means the application runs on
+  # either; it does not mean data migrates between them.
+  postgres-data:

@@ -1,5 +1,17 @@
-# Local development/testing environment for the notes-app container.
-# See container-learning/12-docker-compose-for-local-running.md.
+# Local development/testing environment for the notes-app container,
+# running against SQLite. See
+# container-learning/12-docker-compose-for-local-running.md.
+#
+# This is one of TWO supported local topologies. The other, compose.postgres.yaml,
+# runs the same application image against a real PostgreSQL server:
+#
+#   docker compose up --build                          <- this file, SQLite
+#   docker compose -f compose.postgres.yaml up --build  <- PostgreSQL
+#
+# Neither is more "correct" than the other. This one needs no database server,
+# starts in a second, and is the right choice for most local work. See
+# container-learning/13-running-on-sqlite-or-postgresql.md for when to reach
+# for the other one.
 #
 # The Dockerfile answers "how is the image built?" - this file answers
 # "how is a container from that image configured and run?" Two different
