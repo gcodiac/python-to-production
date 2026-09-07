@@ -4,10 +4,17 @@ name: Release
 # image, then publish it to GHCR - see
 # cicd-learning/07-build-once-promote-many.md.
 #
-# Deliberately workflow_dispatch only. Every push to devops/03-cicd runs
-# pr-checks.yml; nothing pushes a release image automatically - see
-# cicd-learning/13-releases-environments-and-approvals.md.
-
+# Deliberately not triggered by ordinary pushes. Every push to
+# devops/03-cicd runs pr-checks.yml; nothing publishes a release image
+# automatically - see cicd-learning/13-releases-environments-and-approvals.md.
+#
+# GitHub only allows workflow_dispatch to be triggered once a workflow file
+# exists on the repository's default branch - not yet true for this
+# training branch, since merging into main is deliberately out of scope for
+# this stage. The `stage3-test-*` tag trigger below is a temporary,
+# documented workaround so this workflow can actually be exercised for real
+# on this branch; it's meant to be removed once devops/03-cicd is merged
+# and workflow_dispatch alone is sufficient.
 on:
   workflow_dispatch:
     inputs:
@@ -18,6 +25,9 @@ on:
           publish only the sha-based tag.
         required: false
         default: ""
+  push:
+    tags:
+      - "stage3-test-*"
 
 permissions:
   contents: read
