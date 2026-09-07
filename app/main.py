@@ -48,3 +48,40 @@ def get_note(note_id: int):
         return dict(row)
     finally:
         connection.close()
+
+
+@app.put("/notes/{note_id}", response_model=Note)
+def update_note(note_id: int, note: NoteUpdate):
+    connection = get_connection()
+    try:
+        existing = connection.execute(
+            "SELECT * FROM notes WHERE id = ?", (note_id,)
+        ).fetchone()
+        if existing is None:
+            raise HTTPException(status_code=404, detail="Note not found")
+        connection.execute(
+            "UPDATE notes SET title = ?, content = ? WHERE id = ?",
+            (note.title, note.content, note_id),
+        )
+        connection.commit()
+        row = connection.execute(
+            "SELECT * FROM notes WHERE id = ?", (note_id,)
+        ).fetchone()
+        return dict(row)
+    finally:
+        connection.close()
+
+
+@app.delete("/notes/{note_id}", status_code=204)
+def delete_note(note_id: int):
+    connection = get_connection()
+    try:
+        existing = connection.execute(
+            "SELECT * FROM notes WHERE id = ?", (note_id,)
+        ).fetchone()
+        if existing is None:
+            raise HTTPException(status_code=404, detail="Note not found")
+        connection.execute("DELETE FROM notes WHERE id = ?", (note_id,))
+        connection.commit()
+    finally:
+        connection.close()
