@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# SQLite database files created by running the app
+*.db
+*.db-journal
+
+# Test / coverage artefacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor/OS cruft
+.vscode/
+.idea/
+.DS_Store
+
+# Local reference/teaching material - not part of the project history
+/original/
+/learning/
