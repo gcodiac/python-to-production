@@ -1,0 +1,55 @@
+# Everything Docker sends to the builder as the "build context" before a
+# single instruction runs - see container-learning/05-docker-build-context-and-dockerignore.md.
+# Keeping this list tight makes builds faster and, more importantly, means
+# secrets and local-only files are never even transmitted to the builder in
+# the first place.
+
+# Version control - the build never needs history, only the working tree.
+.git
+.gitignore
+
+# Local environment - may contain real secrets, and must never end up
+# inside an image layer.
+.env
+.env.*
+!.env.example
+
+# Virtual environments
+.venv/
+venv/
+
+# Python bytecode/build artefacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Test/lint/coverage artefacts - dev-only, never needed at runtime
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local SQLite database files - never ship local data inside the image
+*.db
+*.db-journal
+
+# Editor/OS cruft
+.vscode/
+.idea/
+.DS_Store
+
+# Local reference/teaching material and generated reports - large, and
+# irrelevant to what actually runs in the container
+/original/
+/learning/
+/devops-learning/
+/container-learning/
+/reports/
+
+# Container tooling files that don't need to be inside their own build context
+Dockerfile
+.dockerignore
+compose.yaml
