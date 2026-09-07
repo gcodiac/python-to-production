@@ -106,6 +106,21 @@ data "aws_iam_policy_document" "github_deploy" {
     actions   = ["eks:DescribeCluster"]
     resources = [var.eks_cluster_arn]
   }
+
+  # Read-only metadata for the one database, so the deploy workflow can
+  # discover the endpoint, username and secret ARN rather than having them
+  # hand-copied into GitHub variables that drift.
+  #
+  # DescribeDBInstances never returns the password - only the ARN of the
+  # Secrets Manager secret holding it. This role is deliberately NOT granted
+  # secretsmanager:GetSecretValue: only the application Pod (via Pod Identity)
+  # can read the actual credential.
+  statement {
+    sid       = "RdsDescribe"
+    effect    = "Allow"
+    actions   = ["rds:DescribeDBInstances"]
+    resources = [var.rds_instance_arn]
+  }
 }
 
 resource "aws_iam_role_policy" "github_deploy" {
