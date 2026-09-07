@@ -13,6 +13,7 @@ CI) always take priority over anything in `.env`.
 import os
 
 from dotenv import load_dotenv
+from sqlalchemy.engine import URL
 
 load_dotenv()
 
@@ -32,24 +33,106 @@ LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 # data lives. It is a SQLAlchemy URL, so one variable selects both the
 # database engine and its location:
 #
-#   sqlite:///./notes.db    a local file - no server to install, the default
+#   sqlite:///./notes.db                                a local file
+#   postgresql+psycopg://user:password@host:5432/notes  a database server
 #
 # The earlier NOTES_DB_PATH variable is gone on purpose. Two ways to say the
 # same thing is one too many: it doubles the number of states a reviewer has
 # to reason about and hides which one actually won.
+#
+# There is, however, one situation a single URL handles badly: when the
+# password must not be written down next to everything else. A password
+# embedded in DATABASE_URL has to be assembled by whatever sets that variable,
+# which usually means the password ends up in a deployment manifest, a shell
+# history, or a process listing. So the application also accepts the
+# connection details as separate components, with the password delivered on
+# its own - ideally as a file the runtime mounts.
+#
+# Precedence, in order:
+#
+#   1. DATABASE_URL             used exactly as given
+#   2. DB_HOST (+ DB_*)         a PostgreSQL URL is assembled from the parts
+#   3. neither                  DEFAULT_DATABASE_URL - local SQLite
 DEFAULT_DATABASE_URL = "sqlite:///./notes.db"
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
+DB_HOST = os.environ.get("DB_HOST")
+DB_PORT = int(os.environ.get("DB_PORT", "5432"))
+DB_NAME = os.environ.get("DB_NAME", "notes")
+DB_USER = os.environ.get("DB_USER", "notes")
 
-def database_url() -> str:
-    """Return the SQLAlchemy URL the application should connect to.
+# Left unset by default so the driver's own default applies. A deployment
+# talking to a database over an untrusted network should set this to
+# "require" (or stricter) - that is a property of the environment, not of
+# the application, so the application does not presume it.
+DB_SSLMODE = os.environ.get("DB_SSLMODE")
 
-    A function rather than a constant because later configuration work gives
-    this decision more than one input - see app/database.py for the only
-    consumer.
+# Two ways to supply the password, deliberately ordered:
+#
+#   DB_PASSWORD_FILE   a path the runtime mounts a secret into. Preferred:
+#                      file contents do not appear in `env`, in a process
+#                      listing, in `docker inspect`, or in a crash report.
+#   DB_PASSWORD        the plain environment variable. Convenient for a
+#                      throwaway local database; weaker everywhere else.
+DB_PASSWORD_FILE = os.environ.get("DB_PASSWORD_FILE")
+DB_PASSWORD = os.environ.get("DB_PASSWORD")
+
+# The SQLAlchemy dialect+driver used when the URL is assembled from parts.
+POSTGRES_DRIVER = "postgresql+psycopg"
+
+
+class ConfigurationError(RuntimeError):
+    """Raised when the supplied configuration cannot produce a usable database.
+
+    Failing loudly at this point is deliberate. A half-configured database is
+    the kind of problem that otherwise surfaces as a confusing error on the
+    first request that happens to touch storage.
     """
-    return DATABASE_URL or DEFAULT_DATABASE_URL
+
+
+def read_db_password() -> str | None:
+    """Return the database password, preferring the file over the variable.
+
+    Read on each call rather than cached at import time, so a rotated secret
+    is picked up without restarting the process.
+    """
+    if DB_PASSWORD_FILE:
+        try:
+            with open(DB_PASSWORD_FILE, encoding="utf-8") as handle:
+                return handle.read().strip()
+        except OSError:
+            return None
+    return DB_PASSWORD
+
+
+def database_url() -> str | URL:
+    """Return the SQLAlchemy URL the application should connect to."""
+    if DATABASE_URL:
+        return DATABASE_URL
+
+    if DB_HOST:
+        password = read_db_password()
+        if not password:
+            raise ConfigurationError(
+                "DB_HOST is set but no password is available - set "
+                "DB_PASSWORD_FILE (preferred) or DB_PASSWORD."
+            )
+        # URL.create() escapes each component correctly. Building this string
+        # by hand is a real bug, not a style preference: a password containing
+        # "@", ":" or "/" silently produces a URL pointing at the wrong host.
+        return URL.create(
+            POSTGRES_DRIVER,
+            username=DB_USER,
+            password=password,
+            host=DB_HOST,
+            port=DB_PORT,
+            database=DB_NAME,
+            query={"sslmode": DB_SSLMODE} if DB_SSLMODE else {},
+        )
+
+    return DEFAULT_DATABASE_URL
+
 
 # Unlike the values above, APP_SECRET does not get a real fallback: a secret
 # that silently defaults to a known placeholder in production is worse than
