@@ -1,13 +1,6 @@
-import os
 import sqlite3
 
-DB_PATH = os.environ.get("NOTES_DB_PATH", "notes.db")
-
-# TRAINING-ISSUE: Hard-coded configuration should be moved into environment
-# variables. This constant isn't even wired up to the connection below (which
-# correctly reads NOTES_DB_PATH) - it's the kind of leftover, inconsistent
-# configuration a learner should find and clean up.
-DATABASE_URL = "sqlite:///./notes.db"
+from app.config import DB_PATH
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS notes (
