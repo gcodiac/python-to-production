@@ -105,6 +105,20 @@ variable "github_repository" {
   default     = "gcodiac/python-to-production"
 }
 
+variable "github_oidc_subject_prefix" {
+  description = <<-EOT
+    The exact prefix GitHub puts in the OIDC token's `sub` claim for this
+    repository. Modern GitHub embeds immutable numeric owner/repository IDs
+    rather than plain names, so this cannot be assumed - discover it with:
+
+      gh api repos/OWNER/NAME/actions/oidc/customization/sub
+
+    and read the `sub_claim_prefix` field.
+  EOT
+  type        = string
+  default     = "repo:gcodiac@42435299/python-to-production@1341833010"
+}
+
 variable "github_deploy_branch" {
   description = "Branch (in addition to stage4-deploy-* tags) allowed to assume the deploy role."
   type        = string

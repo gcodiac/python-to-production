@@ -14,9 +14,23 @@ locals {
   # Only these exact GitHub OIDC subjects may assume the deploy role. The tag
   # pattern mirrors the Stage 3 approach: a controlled, deliberate trigger
   # rather than "any push to any branch".
+  #
+  # The prefix is NOT simply "repo:owner/name". GitHub now issues subject
+  # claims containing immutable numeric owner and repository IDs, so this
+  # repository's real prefix is:
+  #
+  #   repo:gcodiac@42435299/python-to-production@1341833010
+  #
+  # Discover it for any repository with:
+  #
+  #   gh api repos/OWNER/NAME/actions/oidc/customization/sub
+  #
+  # Guessing the classic format produces exactly one symptom:
+  # "Not authorized to perform sts:AssumeRoleWithWebIdentity" - see
+  # cloud-learning/15-github-oidc-and-kubernetes-deployment.md.
   github_subjects = [
-    "repo:${var.github_repository}:ref:refs/tags/stage4-deploy-*",
-    "repo:${var.github_repository}:ref:refs/heads/${var.github_deploy_branch}",
+    "${var.github_oidc_subject_prefix}:ref:refs/tags/stage4-deploy-*",
+    "${var.github_oidc_subject_prefix}:ref:refs/heads/${var.github_deploy_branch}",
   ]
 }
 
