@@ -1,5 +1,3 @@
-# --- Stage 2, commit 5: multi-stage build ---------------------------------
-#
 # This app's dependencies (fastapi, uvicorn[standard], python-dotenv) all
 # ship prebuilt wheels for this platform - nothing here actually needs a
 # compiler, so multi-stage isn't "required" the way it is for projects with
@@ -34,6 +32,14 @@ RUN pip install --no-cache-dir --no-deps . \
 
 FROM python:3.12.14-slim-bookworm
 
+# A dedicated, unprivileged user for the application to run as - see
+# container-learning/08-running-as-non-root.md. Container root isn't the
+# same thing as host root, but running as a named, uid-1000 user is still
+# real defence in depth: it limits what an attacker who gains code
+# execution inside the container can do to the container's own filesystem.
+RUN groupadd --gid 1000 appuser \
+    && useradd --uid 1000 --gid appuser --no-create-home --shell /usr/sbin/nologin appuser
+
 WORKDIR /app
 
 # The application itself is already inside the venv (it was `pip install`ed
@@ -43,7 +49,16 @@ WORKDIR /app
 # duplication this project doesn't want.
 COPY --from=builder /opt/venv /opt/venv
 
+# appuser only needs to read the venv, but needs to be able to write to its
+# own working directory - the zero-configuration default (no DATABASE_URL
+# set) resolves to a relative "./notes.db" path under here.
+RUN chown -R appuser:appuser /app
+
 ENV PATH="/opt/venv/bin:${PATH}"
+
+# Numeric form, not the name - a name requires /etc/passwd to be present
+# and readable to resolve, which not every minimal base image guarantees.
+USER 1000:1000
 
 EXPOSE 8000
 
