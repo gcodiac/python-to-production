@@ -1,7 +1,10 @@
 import os
 import tempfile
 
-os.environ["NOTES_DB_PATH"] = tempfile.NamedTemporaryFile(suffix=".db", delete=False).name
+# Point the application at a throwaway SQLite file *before* importing it, so
+# the test run never touches a developer's real notes.db.
+_TEST_DB_DIR = tempfile.mkdtemp(prefix="notes-tests-")
+os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB_DIR}/notes.db"
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,10 +16,10 @@ client = TestClient(app)
 
 @pytest.fixture(autouse=True)
 def reset_database():
-    import app.database as database
+    from app import database
 
     connection = database.get_connection()
-    connection.execute("DELETE FROM notes")
+    connection.execute(database.notes.delete())
     connection.commit()
     connection.close()
     yield

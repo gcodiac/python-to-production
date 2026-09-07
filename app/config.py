@@ -26,25 +26,30 @@ APP_PORT = int(os.environ.get("APP_PORT", "8000"))
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 
-# DATABASE_URL is the canonical way to configure storage location. NOTES_DB_PATH
-# is still honoured for backwards compatibility with earlier configuration.
-DATABASE_URL = (
-    os.environ.get("DATABASE_URL")
-    or os.environ.get("NOTES_DB_PATH")
-    or "sqlite:///./notes.db"
-)
+# --- Database configuration ------------------------------------------------
+#
+# DATABASE_URL is the single canonical way to tell this application where its
+# data lives. It is a SQLAlchemy URL, so one variable selects both the
+# database engine and its location:
+#
+#   sqlite:///./notes.db    a local file - no server to install, the default
+#
+# The earlier NOTES_DB_PATH variable is gone on purpose. Two ways to say the
+# same thing is one too many: it doubles the number of states a reviewer has
+# to reason about and hides which one actually won.
+DEFAULT_DATABASE_URL = "sqlite:///./notes.db"
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
-def _sqlite_path(database_url: str) -> str:
-    """Turn a sqlite:/// URL into a plain filesystem path sqlite3.connect() accepts.
+def database_url() -> str:
+    """Return the SQLAlchemy URL the application should connect to.
 
-    A bare path (no "sqlite:///" prefix) is returned unchanged, so existing
-    NOTES_DB_PATH-style values keep working exactly as before.
+    A function rather than a constant because later configuration work gives
+    this decision more than one input - see app/database.py for the only
+    consumer.
     """
-    return database_url.removeprefix("sqlite:///")
-
-
-DB_PATH = _sqlite_path(DATABASE_URL)
+    return DATABASE_URL or DEFAULT_DATABASE_URL
 
 # Unlike the values above, APP_SECRET does not get a real fallback: a secret
 # that silently defaults to a known placeholder in production is worse than
