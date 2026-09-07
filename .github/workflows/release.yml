@@ -37,10 +37,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # Only what this job actually uses - see
-    # cicd-learning/11-cicd-secrets-permissions-and-oidc.md.
+    # cicd-learning/11-cicd-secrets-permissions-and-oidc.md:
+    #   packages:write     - push the image to GHCR
+    #   id-token:write     - OIDC token used to mint the provenance attestation
+    #   attestations:write - publish that attestation against this repository
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
     outputs:
       digest: ${{ steps.publish.outputs.digest }}
       short_sha: ${{ steps.vars.outputs.short_sha }}
@@ -131,6 +136,16 @@ jobs:
           name: sbom-${{ steps.vars.outputs.short_sha }}
           path: sbom.cdx.json
           retention-days: 30
+
+      # Provenance: source commit + this workflow + this builder identity +
+      # these build inputs + this exact output digest - see
+      # cicd-learning/09-provenance-and-attestations.md.
+      - name: Generate build provenance attestation
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          push-to-registry: true
 
       - name: Summary
         run: |
