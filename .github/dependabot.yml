@@ -1,0 +1,27 @@
+# Dependabot proposes updates; it does not merge them - see
+# cicd-learning/12-dependency-update-automation.md. Every update PR still
+# has to pass pr-checks.yml like any other change, and still needs review.
+version: 2
+updates:
+  # Python dependencies declared in pyproject.toml
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # Third-party GitHub Actions used in .github/workflows/ - these are a
+  # supply-chain dependency too, see cicd-learning/05-container-scanning-in-ci.md
+  # and cicd-learning/11's note on treating Actions as dependencies.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # The base image pinned in the Dockerfile
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
