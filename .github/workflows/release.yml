@@ -147,9 +147,29 @@ jobs:
           subject-digest: ${{ steps.publish.outputs.digest }}
           push-to-registry: true
 
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # Keyless signing: identity is this exact workflow run, proven via
+      # GitHub's OIDC token - no long-lived private key exists anywhere -
+      # see cicd-learning/10-signing-and-verifying-images.md.
+      - name: Sign the published image digest (keyless, OIDC)
+        run: cosign sign --yes "${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}"
+
+      # Signing without verification is incomplete - check the signature
+      # exists AND was made by this exact repository's release workflow,
+      # not just by "someone."
+      - name: Verify the signature
+        run: |
+          cosign verify \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/\.github/workflows/release\.yml@.*$" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}"
+
       - name: Summary
         run: |
           echo "### Release published" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Image: \`${{ env.IMAGE_NAME }}:sha-${{ steps.vars.outputs.short_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Digest: \`${{ steps.publish.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Signed and verified: yes (cosign keyless/OIDC)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Provenance attestation: published" >> "$GITHUB_STEP_SUMMARY"
