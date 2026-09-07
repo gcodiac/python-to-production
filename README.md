@@ -33,7 +33,7 @@ The application therefore deliberately begins without:
 
 These are not missing features. They are intentionally left for the learning journey that begins after forking this repository.
 
-For the same reason, the application code also contains a small number of **deliberate** code-quality and configuration/security problems for the [devops-learning/](devops-learning/) track to find — hard-coded configuration, a fake placeholder secret, and a handful of realistic maintainability issues. Every one of them is marked in the source with a comment containing `TRAINING-ISSUE`, so you can always find the full list with `grep -rn "TRAINING-ISSUE" app/`. If you're working through [learning/](learning/) instead, you can ignore these entirely — they don't affect how the application runs.
+**This branch (`devops/01-pre-containerisation`) has since addressed several of them** as part of a completed pre-containerisation review: configuration (`APP_ENV`, `APP_HOST`, `APP_PORT`, `DATABASE_URL`, `LOG_LEVEL`, `APP_SECRET`) is now externalised via environment variables and `app/config.py` (see `.env.example`), and the application fails loudly rather than starting insecurely if `APP_SECRET` is missing in production. Earlier commits on this branch deliberately introduced a small set of code-quality and configuration/security problems for the [devops-learning/](devops-learning/) track to find, each originally marked with a comment containing `TRAINING-ISSUE`. If you want to work through that investigation yourself rather than see the finished result, check out an earlier commit on this branch (before the "Fix static analysis findings" commit) and run `grep -rn "TRAINING-ISSUE" app/` there — the lessons in [devops-learning/](devops-learning/) still describe that exercise in full. The current tip of this branch is the worked example of what completing it looks like.
 
 ## What this application contains
 
@@ -41,6 +41,7 @@ For the same reason, the application code also contains a small number of **deli
 * a simple Notes API (create, read, update, delete) plus a `/health` endpoint
 * a glassmorphic dashboard UI (`app/static/`) served at `/`, built with plain HTML/CSS/JS against the API — no frontend framework or build step
 * SQLite for local persistence (`app/database.py`)
+* environment-based configuration (`app/config.py`, `.env.example`)
 * basic automated tests (`tests/test_notes.py`)
 * Python project configuration (`pyproject.toml`), including optional `ruff`/`bandit` dev tooling used by the DevOps track
 
@@ -51,10 +52,14 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 
+cp .env.example .env   # first time only - adjust values as needed
+
 uvicorn app.main:app --reload
 ```
 
 The dashboard is now available at `http://127.0.0.1:8000`. Interactive API docs are available at `http://127.0.0.1:8000/docs`.
+
+Configuration is read from environment variables (see `.env.example` for the full list) with safe local-development defaults, except `APP_SECRET`, which the app refuses to start without whenever `APP_ENV=production`.
 
 ## Running the tests
 
@@ -93,7 +98,7 @@ Local application
         ↓
 Understanding & analysing an inherited app   <- devops-learning/ covers this far
         ↓
-Application configuration                       (devops-learning/)
+Application configuration                       (devops-learning/ - complete on this branch)
         ↓
 Containerization                                 (a later track — not yet in this repo)
         ↓
