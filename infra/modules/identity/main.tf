@@ -10,9 +10,6 @@
 #
 # See cloud-learning/15-github-oidc-and-kubernetes-deployment.md.
 
-data "aws_caller_identity" "current" {}
-data "aws_partition" "current" {}
-
 # The account may already have this provider (it is a per-account singleton).
 # Setting create_oidc_provider = false lets a caller reference the existing one
 # instead of failing on a duplicate.
