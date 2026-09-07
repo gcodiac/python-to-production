@@ -1,0 +1,124 @@
+name: Release
+
+# A controlled, manually-triggered release: build ONCE, scan that exact
+# image, then publish it to GHCR - see
+# cicd-learning/07-build-once-promote-many.md.
+#
+# Deliberately workflow_dispatch only. Every push to devops/03-cicd runs
+# pr-checks.yml; nothing pushes a release image automatically - see
+# cicd-learning/13-releases-environments-and-approvals.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      extra_tag:
+        description: >-
+          Optional additional tag to publish alongside the immutable
+          sha-<commit> tag (e.g. a training/version label). Leave blank to
+          publish only the sha-based tag.
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+# A release should never be silently cancelled mid-publish by a newer
+# dispatch - unlike pr-checks.yml, this does NOT cancel-in-progress.
+concurrency:
+  group: release-${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  build-scan-publish:
+    name: Build, scan, publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Only what this job actually uses - see
+    # cicd-learning/11-cicd-secrets-permissions-and-oidc.md.
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.publish.outputs.digest }}
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Compute image tag
+        id: vars
+        run: echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      # BUILD ONCE: loaded locally, not pushed yet. Everything from here on
+      # (scan, smoke test, publish) operates on this exact image - nothing
+      # gets rebuilt.
+      - name: Build release image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:sha-${{ steps.vars.outputs.short_sha }}
+          build-args: |
+            GIT_REVISION=${{ steps.vars.outputs.short_sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Scan the built image before publishing
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:sha-${{ steps.vars.outputs.short_sha }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Smoke test the exact image about to be published
+        run: |
+          docker run -d --name release-smoke -p 8000:8000 \
+            -e APP_ENV=development \
+            "${{ env.IMAGE_NAME }}:sha-${{ steps.vars.outputs.short_sha }}"
+          for _ in $(seq 1 15); do
+            status="$(docker inspect --format='{{.State.Health.Status}}' release-smoke 2>/dev/null || echo starting)"
+            [ "$status" = "healthy" ] && break
+            sleep 2
+          done
+          docker inspect --format='{{.State.Health.Status}}' release-smoke | grep -q healthy
+          curl -sf http://127.0.0.1:8000/health
+          docker rm -f release-smoke
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Publish the exact, already-built, already-scanned image - not a
+      # rebuild. This is "build once, promote many": the artefact that
+      # gets published is the artefact that was just tested.
+      - name: Publish to GHCR
+        id: publish
+        run: |
+          docker push "${{ env.IMAGE_NAME }}:sha-${{ steps.vars.outputs.short_sha }}"
+
+          if [ -n "${{ inputs.extra_tag }}" ]; then
+            docker tag \
+              "${{ env.IMAGE_NAME }}:sha-${{ steps.vars.outputs.short_sha }}" \
+              "${{ env.IMAGE_NAME }}:${{ inputs.extra_tag }}"
+            docker push "${{ env.IMAGE_NAME }}:${{ inputs.extra_tag }}"
+          fi
+
+          DIGEST="$(docker inspect --format='{{index .RepoDigests 0}}' \
+            "${{ env.IMAGE_NAME }}:sha-${{ steps.vars.outputs.short_sha }}" | cut -d'@' -f2)"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "Published digest: ${DIGEST}"
+
+      - name: Summary
+        run: |
+          echo "### Release published" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Image: \`${{ env.IMAGE_NAME }}:sha-${{ steps.vars.outputs.short_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Digest: \`${{ steps.publish.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
