@@ -1,4 +1,5 @@
 import json  # TRAINING-ISSUE: Unused import left behind after a refactor.
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -6,6 +7,25 @@ from fastapi.staticfiles import StaticFiles
 
 from app.database import get_connection
 from app.models import Note, NoteCreate, NoteUpdate
+
+# --- Application configuration -------------------------------------------
+#
+# TRAINING-ISSUE: These values are hard-coded directly in source instead of
+# being read from environment variables. That means the *only* way to run
+# this app differently in development, test, staging, or production is to
+# edit this file and ship a new copy of the code for each environment.
+APP_ENV = "development"
+APP_HOST = "0.0.0.0"
+APP_PORT = 8000
+LOG_LEVEL = "INFO"
+
+# TRAINING-ISSUE: Fake hard-coded secret included intentionally for
+# security-scanning training. Never commit real secrets like this to source
+# control - this one is a training placeholder only.
+APP_SECRET = "training-only-do-not-use-in-production-12345"
+
+logging.basicConfig(level=LOG_LEVEL)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Minimal Notes API")
 
@@ -130,6 +150,6 @@ if __name__ == "__main__":
     import uvicorn
 
     try:
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+        uvicorn.run(app, host=APP_HOST, port=APP_PORT)
     except Exception:  # TRAINING-ISSUE: Overly broad exception handling swallows every error.
         pass
