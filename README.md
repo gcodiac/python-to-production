@@ -6,14 +6,29 @@ The application is intentionally kept minimal. It contains only the core applica
 
 The goal is to provide a simple application that can be forked and progressively improved while learning topics such as Platform Engineering, DevOps, Infrastructure as Code, cloud infrastructure, security, monitoring, observability, and SRE.
 
-## Two learning tracks
+## Three learning tracks
 
-This repository supports two different learning paths, both grounded in this exact application.
+This repository supports three learning paths, all grounded in this exact application, each picking up where the last one left off:
+
+```text
+Track 1
+Python / FastAPI Development                (learning/)
+        ↓
+Track 2
+DevOps Pre-Containerisation                  (devops-learning/, devops/01-pre-containerisation)
+        ↓
+Track 3
+Container Engineering & Software Supply Chain (container-learning/, devops/02-containerisation-supply-chain)
+        ↓
+Next
+CI/CD, Registry, Signing & Provenance         (a later stage, not yet in this repository)
+```
 
 * **[learning/](learning/) — Application Development / FastAPI.** New to Python or FastAPI? This 22-lesson course builds this exact Notes API from an empty folder, from absolute basics through a finished, tested app with a working dashboard.
-* **[devops-learning/](devops-learning/) — DevOps / Platform Engineering.** Already have this app (or one like it)? This 14-lesson course puts you in the position of a platform/DevOps engineer *receiving* an already-built application from a development team, and walks you through understanding, analysing, and preparing it for containerisation — investigation, static and security analysis, and environment-based configuration, all *before* a single `Dockerfile` gets written.
+* **[devops-learning/](devops-learning/) — DevOps / Platform Engineering.** Already have this app (or one like it)? This 14-lesson course puts you in the position of a platform/DevOps engineer *receiving* an already-built application from a development team, and walks you through understanding, analysing, and preparing it for containerisation — investigation, static and security analysis, and environment-based configuration, all *before* a single `Dockerfile` gets written. Lives on the `devops/01-pre-containerisation` branch (and, from that branch onward).
+* **[container-learning/](container-learning/) — Container Engineering & Software Supply Chain.** Takes the clean, remediated application from Track 2 and turns it into a real, inspected, tested, scanned, hardened container artefact: a production-quality multi-stage `Dockerfile`, locked dependencies, non-root runtime, persistent storage, a `compose.yaml`, dependency/image/secret scanning (`SECURITY.md`), an SBOM, and a manual release quality gate — deliberately stopping short of CI/CD. Lives on the `devops/02-containerisation-supply-chain` branch.
 
-You don't have to complete the first track to start the second, but it helps to at least skim [learning/](learning/) so the application itself isn't unfamiliar.
+You don't have to complete one track to start the next, but each assumes familiarity with what the previous one built. Tracks 2 and 3 live on their own branches specifically so their git history can teach the *process* of hardening an application/image one deliberate step at a time - see each track's README for how to read that history.
 
 ## Why is it so minimal?
 
@@ -43,7 +58,8 @@ These are not missing features. They are intentionally left for the learning jou
 * SQLite for local persistence (`app/database.py`)
 * environment-based configuration (`app/config.py`, `.env.example`)
 * basic automated tests (`tests/test_notes.py`)
-* Python project configuration (`pyproject.toml`), including optional `ruff`/`bandit` dev tooling used by the DevOps track
+* Python project configuration (`pyproject.toml`) and locked dependencies (`requirements.txt`, `requirements-dev.txt`)
+* a production-quality container image (`Dockerfile`, `.dockerignore`, `compose.yaml`) and its security scanning results (`SECURITY.md`) — see the [container-learning/](container-learning/) track
 
 ## Running locally
 
@@ -66,6 +82,17 @@ Configuration is read from environment variables (see `.env.example` for the ful
 ```bash
 pytest
 ```
+
+## Running in a container
+
+On the `devops/02-containerisation-supply-chain` branch, the same application also runs as a container — see [container-learning/](container-learning/) for how the `Dockerfile` and `compose.yaml` got there, one deliberate step at a time.
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+The manual release quality gate (tests, linting, security scanning, image scanning, SBOM generation) is documented in `SECURITY.md` and wrapped in `Makefile` (`make check`) once you're comfortable with the individual commands it runs.
 
 ## API
 
@@ -96,13 +123,15 @@ This repository acts as a reusable starting application. A learner can fork it a
 ```text
 Local application
         ↓
-Understanding & analysing an inherited app   <- devops-learning/ covers this far
+Understanding & analysing an inherited app   (devops-learning/, devops/01-pre-containerisation)
         ↓
-Application configuration                       (devops-learning/ - complete on this branch)
+Application configuration                     (devops-learning/ - complete on that branch)
         ↓
-Containerization                                 (a later track — not yet in this repo)
+Containerization                                 (container-learning/, devops/02-containerisation-supply-chain)
         ↓
-CI/CD
+Container security, SBOMs, manual release gate     (container-learning/ - complete on that branch)   <- you are here
+        ↓
+CI/CD                                                (a later stage — not yet in this repo)
         ↓
 Infrastructure as Code
         ↓
