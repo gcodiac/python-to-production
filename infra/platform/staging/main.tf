@@ -90,45 +90,53 @@ resource "helm_release" "aws_load_balancer_controller" {
   timeout = 600
 }
 
-# --- Secrets Store CSI driver ----------------------------------------------
+# --- Secrets Store CSI driver + AWS provider -------------------------------
 #
 #   Secrets Manager  ->  AWS provider  ->  CSI driver  ->  file inside the Pod
 #
 # This is what lets the database password reach the application without ever
 # existing as a Kubernetes Secret in Git, a Helm value, or an env var.
+#
+# ONE release, not two. The AWS provider chart declares the upstream
+# secrets-store-csi-driver as a sub-chart dependency, so installing both
+# separately makes two Helm releases fight over the same ServiceAccount:
+#
+#   invalid ownership metadata; annotation validation error:
+#   key "meta.helm.sh/release-name" must equal "secrets-provider-aws"
+#
+# It also matters for correctness, not just tidiness: the sub-chart's default
+# values request service-account tokens for the "pods.eks.amazonaws.com"
+# audience, which is exactly what EKS Pod Identity needs. Installing the
+# driver standalone would omit that and silently break secret retrieval.
 
-resource "helm_release" "secrets_store_csi_driver" {
-  name       = "secrets-store-csi-driver"
-  repository = "https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts"
-  chart      = "secrets-store-csi-driver"
-  version    = var.csi_driver_chart_version
-  namespace  = "kube-system"
-
-  values = [yamlencode({
-    syncSecret = {
-      # Not syncing to Kubernetes Secret objects: the password only ever
-      # exists as a mounted file in the Pod that needs it, never as a
-      # cluster-wide Secret any namespace reader could dump.
-      enabled = false
-    }
-    enableSecretRotation = true
-    rotationPollInterval = "2m"
-  })]
-
-  wait    = true
-  timeout = 600
-}
-
-# The AWS-specific provider plugin for the CSI driver above.
 resource "helm_release" "secrets_provider_aws" {
   name       = "secrets-provider-aws"
   repository = "https://aws.github.io/secrets-store-csi-driver-provider-aws"
   chart      = "secrets-store-csi-driver-provider-aws"
-  version    = var.aws_provider_chart_version
+  version    = var.aws_provider_chart_version # pinned, never "latest"
   namespace  = "kube-system"
+
+  values = [yamlencode({
+    # Set explicitly rather than discovered: the node's IMDS hop limit is 1
+    # (see the EKS module), so Pods cannot read region metadata themselves.
+    awsRegion = var.region
+
+    # Values for the bundled upstream CSI driver sub-chart.
+    "secrets-store-csi-driver" = {
+      install = true
+
+      syncSecret = {
+        # Not syncing to Kubernetes Secret objects: the password only ever
+        # exists as a mounted file in the Pod that needs it, never as a
+        # cluster-wide Secret any namespace reader could dump.
+        enabled = false
+      }
+
+      enableSecretRotation = true
+      rotationPollInterval = "2m"
+    }
+  })]
 
   wait    = true
   timeout = 600
-
-  depends_on = [helm_release.secrets_store_csi_driver]
 }
