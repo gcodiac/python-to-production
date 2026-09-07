@@ -6,9 +6,14 @@ The application is intentionally kept minimal. It contains only the core applica
 
 The goal is to provide a simple application that can be forked and progressively improved while learning topics such as Platform Engineering, DevOps, Infrastructure as Code, cloud infrastructure, security, monitoring, observability, and SRE.
 
-## Learn how this was built
+## Two learning tracks
 
-New to Python or FastAPI? Follow the step-by-step [learning/](learning/) course — 22 lessons from absolute basics to a finished, tested app.
+This repository supports two different learning paths, both grounded in this exact application.
+
+* **[learning/](learning/) — Application Development / FastAPI.** New to Python or FastAPI? This 22-lesson course builds this exact Notes API from an empty folder, from absolute basics through a finished, tested app with a working dashboard.
+* **[devops-learning/](devops-learning/) — DevOps / Platform Engineering.** Already have this app (or one like it)? This 14-lesson course puts you in the position of a platform/DevOps engineer *receiving* an already-built application from a development team, and walks you through understanding, analysing, and preparing it for containerisation — investigation, static and security analysis, and environment-based configuration, all *before* a single `Dockerfile` gets written.
+
+You don't have to complete the first track to start the second, but it helps to at least skim [learning/](learning/) so the application itself isn't unfamiliar.
 
 ## Why is it so minimal?
 
@@ -28,14 +33,16 @@ The application therefore deliberately begins without:
 
 These are not missing features. They are intentionally left for the learning journey that begins after forking this repository.
 
+For the same reason, the application code also contains a small number of **deliberate** code-quality and configuration/security problems for the [devops-learning/](devops-learning/) track to find — hard-coded configuration, a fake placeholder secret, and a handful of realistic maintainability issues. Every one of them is marked in the source with a comment containing `TRAINING-ISSUE`, so you can always find the full list with `grep -rn "TRAINING-ISSUE" app/`. If you're working through [learning/](learning/) instead, you can ignore these entirely — they don't affect how the application runs.
+
 ## What this application contains
 
 * a small FastAPI application (`app/main.py`)
-* a simple Notes API (create, read, update, delete)
+* a simple Notes API (create, read, update, delete) plus a `/health` endpoint
 * a glassmorphic dashboard UI (`app/static/`) served at `/`, built with plain HTML/CSS/JS against the API — no frontend framework or build step
 * SQLite for local persistence (`app/database.py`)
 * basic automated tests (`tests/test_notes.py`)
-* Python project configuration (`pyproject.toml`)
+* Python project configuration (`pyproject.toml`), including optional `ruff`/`bandit` dev tooling used by the DevOps track
 
 ## Running locally
 
@@ -64,6 +71,7 @@ pytest
 | GET    | `/notes/{id}` | Get a single note    |
 | PUT    | `/notes/{id}` | Update a note         |
 | DELETE | `/notes/{id}` | Delete a note         |
+| GET    | `/health`     | Basic liveness/readiness check |
 
 A note has the shape:
 
@@ -83,9 +91,11 @@ This repository acts as a reusable starting application. A learner can fork it a
 ```text
 Local application
         ↓
-Application configuration
+Understanding & analysing an inherited app   <- devops-learning/ covers this far
         ↓
-Containerization
+Application configuration                       (devops-learning/)
+        ↓
+Containerization                                 (a later track — not yet in this repo)
         ↓
 CI/CD
         ↓
