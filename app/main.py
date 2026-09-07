@@ -1,13 +1,12 @@
 import logging
-import sqlite3
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
-from app.config import APP_ENV, APP_HOST, APP_PORT, LOG_LEVEL
-from app.database import DatabaseUnavailableError, get_connection
+from app.config import APP_ENV, APP_HOST, APP_PORT, DB_BACKEND, LOG_LEVEL
+from app.database import DatabaseUnavailableError, get_connection, insert_note
 from app.models import Note, NoteCreate, NoteUpdate
 
 logging.basicConfig(level=LOG_LEVEL)
@@ -52,7 +51,10 @@ def get_db():
         connection.close()
 
 
-DbConnection = Annotated[sqlite3.Connection, Depends(get_db)]
+# Deliberately not typed as sqlite3.Connection any more: the same dependency
+# now yields either a sqlite3 connection or the PostgreSQL adapter, depending
+# entirely on configuration - see app/database.py.
+DbConnection = Annotated[Any, Depends(get_db)]
 
 
 @app.get("/notes", response_model=list[Note])
@@ -64,15 +66,9 @@ def list_notes(connection: DbConnection, sort: str = "id"):
 
 @app.post("/notes", response_model=Note, status_code=201)
 def create_note(note: NoteCreate, connection: DbConnection):
-    cursor = connection.execute(
-        "INSERT INTO notes (title, content) VALUES (?, ?)",
-        (note.title, note.content),
-    )
-    connection.commit()
-    row = connection.execute(
-        "SELECT * FROM notes WHERE id = ?", (cursor.lastrowid,)
-    ).fetchone()
-    return dict(row)
+    # Insert is the one operation where the two backends genuinely differ
+    # (lastrowid vs RETURNING), so it lives in the storage layer.
+    return insert_note(connection, note.title, note.content)
 
 
 @app.get("/notes/{note_id}", response_model=Note)
@@ -108,8 +104,36 @@ def delete_note(note_id: int, connection: DbConnection):
 
 @app.get("/health")
 def health_check():
-    """Basic liveness/readiness signal for load balancers, orchestrators, etc."""
+    """Liveness: is this process alive and serving HTTP?
+
+    Deliberately does NOT touch the database. A liveness probe that fails
+    during a transient database outage would make Kubernetes restart a
+    perfectly healthy Pod, turning a brief database blip into a crash loop -
+    see cloud-learning/13-ingress-load-balancing-and-health.md.
+    """
     return {"status": "ok", "environment": APP_ENV}
+
+
+@app.get("/ready")
+def readiness_check():
+    """Readiness: can this Pod actually serve requests right now?
+
+    Unlike /health, this does check the database, because an instance that
+    cannot reach its database should be taken out of the load balancer's
+    rotation - without being restarted.
+    """
+    try:
+        connection = get_connection()
+    except DatabaseUnavailableError as exc:
+        logger.warning("Readiness check failed: %s", exc)
+        raise HTTPException(
+            status_code=503, detail="Database unavailable"
+        ) from exc
+    try:
+        connection.execute("SELECT 1")
+    finally:
+        connection.close()
+    return {"status": "ready", "database": DB_BACKEND}
 
 
 STATIC_DIR = Path(__file__).parent / "static"

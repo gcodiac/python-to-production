@@ -65,3 +65,37 @@ def test_delete_note():
 
     fetched = client.get(f"/notes/{note_id}")
     assert fetched.status_code == 404
+
+
+def test_health_does_not_touch_the_database():
+    """Liveness must not depend on the database.
+
+    A liveness probe that fails during a database blip would make Kubernetes
+    restart healthy Pods - see cloud-learning/13.
+    """
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json()["status"] == "ok"
+
+
+def test_ready_reports_the_active_backend():
+    """Readiness does check the database, and names the backend in use."""
+    response = client.get("/ready")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ready"
+    # Tests run against SQLite; AWS staging reports "postgres" here instead.
+    assert body["database"] == "sqlite"
+
+
+def test_postgres_adapter_translates_placeholders():
+    """The PostgreSQL adapter rewrites SQLite's `?` to psycopg's `%s`.
+
+    Unit-level so it runs in CI without a live PostgreSQL server.
+    """
+    from app.database import _PostgresConnection
+
+    translated = _PostgresConnection._translate(
+        "SELECT * FROM notes WHERE id = ? AND title = ?"
+    )
+    assert translated == "SELECT * FROM notes WHERE id = %s AND title = %s"

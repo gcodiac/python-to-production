@@ -46,6 +46,50 @@ def _sqlite_path(database_url: str) -> str:
 
 DB_PATH = _sqlite_path(DATABASE_URL)
 
+# --- PostgreSQL (cloud) configuration -------------------------------------
+#
+# Local development stays on SQLite (above). When DB_HOST is set - which is
+# what the Kubernetes ConfigMap does in AWS staging - the app talks to
+# PostgreSQL instead. The same image supports both; only configuration
+# changes. See cloud-learning/10-rds-postgresql-and-persistent-data.md.
+DB_HOST = os.environ.get("DB_HOST")
+DB_PORT = int(os.environ.get("DB_PORT", "5432"))
+DB_NAME = os.environ.get("DB_NAME", "notes")
+DB_USER = os.environ.get("DB_USER", "notes")
+
+# sslmode=require encrypts the connection to RDS. Production should consider
+# verify-full plus a CA bundle - see the lesson for that trade-off.
+DB_SSLMODE = os.environ.get("DB_SSLMODE", "require")
+
+# The password is never an environment variable and never appears in Git,
+# Helm values, or a ConfigMap. It is read from a file that the Secrets Store
+# CSI driver mounts into the Pod from AWS Secrets Manager - see
+# cloud-learning/11-secrets-manager-and-kubernetes-secrets.md.
+DB_PASSWORD_FILE = os.environ.get("DB_PASSWORD_FILE")
+
+# Escape hatch for local `docker compose` experiments against a throwaway
+# PostgreSQL. Not used in AWS staging, where DB_PASSWORD_FILE is set.
+_DB_PASSWORD_ENV = os.environ.get("DB_PASSWORD")
+
+
+def read_db_password() -> str | None:
+    """Return the PostgreSQL password, preferring the mounted secret file.
+
+    Read on each connection attempt rather than cached at import time, so a
+    rotated secret is picked up without restarting the Pod.
+    """
+    if DB_PASSWORD_FILE:
+        try:
+            with open(DB_PASSWORD_FILE, encoding="utf-8") as handle:
+                return handle.read().strip()
+        except OSError:
+            return None
+    return _DB_PASSWORD_ENV
+
+
+# "postgres" whenever a host is configured, otherwise the SQLite default.
+DB_BACKEND = "postgres" if DB_HOST else "sqlite"
+
 # Unlike the values above, APP_SECRET does not get a real fallback: a secret
 # that silently defaults to a known placeholder in production is worse than
 # no secret at all. Outside production, a placeholder is fine so the app can
