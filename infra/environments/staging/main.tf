@@ -131,6 +131,7 @@ module "identity" {
 
   ecr_repository_arn = aws_ecr_repository.app.arn
   eks_cluster_arn    = "arn:${data.aws_partition.current.partition}:eks:${var.region}:${data.aws_caller_identity.current.account_id}:cluster/${local.name}"
+  rds_instance_arn   = module.database.instance_arn
 
   create_oidc_provider = var.create_github_oidc_provider
 }

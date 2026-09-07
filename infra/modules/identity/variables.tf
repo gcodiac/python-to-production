@@ -35,6 +35,11 @@ variable "ecr_repository_arn" {
   type        = string
 }
 
+variable "rds_instance_arn" {
+  description = "ARN of the RDS instance the deploy role may describe (metadata only, never the password)."
+  type        = string
+}
+
 variable "eks_cluster_arn" {
   description = "ARN of the EKS cluster the deploy role may describe."
   type        = string
