@@ -86,6 +86,7 @@ module "eks" {
   node_max_size      = var.node_max_size
 
   application_namespace  = var.application_namespace
+  enable_github_access   = true
   github_deploy_role_arn = module.identity.github_deploy_role_arn
 }
 
