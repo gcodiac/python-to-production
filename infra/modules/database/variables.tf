@@ -49,15 +49,28 @@ variable "allocated_storage" {
 }
 
 variable "max_allocated_storage" {
-  description = "Storage autoscaling ceiling in GiB."
+  description = <<-EOT
+    Storage autoscaling ceiling in GiB. 0 disables autoscaling entirely,
+    which is what this sandbox wants: the Free Tier allowance is 20 GiB, and
+    silently autoscaling past it would start billing without warning.
+  EOT
   type        = number
-  default     = 50
+  default     = 0
 }
 
 variable "backup_retention_days" {
-  description = "Automated backup retention. Short but deliberately non-zero."
+  description = <<-EOT
+    Automated backup retention in days. Deliberately non-zero so backups
+    genuinely exist, but only 1 day: a Free Tier restricted account rejects
+    anything longer with
+
+      FreeTierRestrictionError: The specified backup retention period
+      exceeds the maximum available to free tier customers.
+
+    Production should retain far longer (7-35 days is typical).
+  EOT
   type        = number
-  default     = 3
+  default     = 1
 }
 
 variable "skip_final_snapshot" {
