@@ -61,6 +61,12 @@ variable "application_namespace" {
   default     = "notes-app"
 }
 
+variable "enable_github_access" {
+  description = "Create an EKS access entry for the GitHub deploy role. Must be statically known at plan time."
+  type        = bool
+  default     = true
+}
+
 variable "github_deploy_role_arn" {
   description = "IAM role ARN used by GitHub Actions, granted namespace-scoped Kubernetes access. Null disables the access entry."
   type        = string

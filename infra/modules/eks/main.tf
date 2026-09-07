@@ -235,8 +235,12 @@ resource "aws_eks_addon" "coredns" {
 
 # The GitHub Actions deployment role gets Kubernetes access scoped to the
 # application namespace only - it can deploy the Notes app and nothing else.
+# count must be knowable at PLAN time. Deriving it from
+# `github_deploy_role_arn` would make Terraform fail with "Invalid count
+# argument", because that ARN does not exist until the IAM role is applied -
+# hence a separate, statically-known boolean.
 resource "aws_eks_access_entry" "github_deploy" {
-  count = var.github_deploy_role_arn == null ? 0 : 1
+  count = var.enable_github_access ? 1 : 0
 
   cluster_name  = aws_eks_cluster.this.name
   principal_arn = var.github_deploy_role_arn
@@ -244,7 +248,7 @@ resource "aws_eks_access_entry" "github_deploy" {
 }
 
 resource "aws_eks_access_policy_association" "github_deploy" {
-  count = var.github_deploy_role_arn == null ? 0 : 1
+  count = var.enable_github_access ? 1 : 0
 
   cluster_name  = aws_eks_cluster.this.name
   principal_arn = var.github_deploy_role_arn
