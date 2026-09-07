@@ -2,8 +2,8 @@
 
 This document records what security tooling this project runs, why each tool
 exists (they check different things - see
-`container-learning/18-python-dependency-vulnerability-scanning.md` and
-`container-learning/19-scanning-container-images.md` for the full reasoning),
+`container-learning/19-python-dependency-vulnerability-scanning.md` and
+`container-learning/20-scanning-container-images.md` for the full reasoning),
 and the most recent results. Regenerate everything below with the commands
 shown; raw output goes to the git-ignored `reports/` directory.
 
@@ -64,7 +64,7 @@ hadolint Dockerfile
 
 **Result (most recent run): no findings.** Earlier, naive versions of this
 Dockerfile (still visible in this branch's git history) did trigger findings
-along the way - see `container-learning/13-linting-the-dockerfile.md` for
+along the way - see `container-learning/14-linting-the-dockerfile.md` for
 what was found and fixed, and why Hadolint's default rules don't catch
 everything (missing non-root user, missing dependency-layer caching) the way
 a broader review does - the same lesson Stage 1 taught about Ruff vs.
@@ -82,7 +82,7 @@ grype sbom:reports/sbom.cdx.json
 
 An SBOM answers a question none of the tools above can: *if a critical
 vulnerability is disclosed tomorrow in some component, do I even contain
-that component, and where?* See `container-learning/17-generating-an-sbom.md`.
+that component, and where?* See `container-learning/18-generating-an-sbom.md`.
 
 Both an industry-standard CycloneDX JSON and an SPDX JSON SBOM are generated
 (neither is committed - regenerate them from source with the commands
@@ -115,5 +115,5 @@ each earns its place by teaching a distinct concept.
 ## What this project deliberately did not need to fix
 
 Every scan above came back clean. That is reported here as a genuine result,
-not because findings were hidden - see `container-learning/16-understanding-and-triaging-cves.md`
+not because findings were hidden - see `container-learning/17-understanding-and-triaging-cves.md`
 for how this project would triage and document a real finding if one showed up.
