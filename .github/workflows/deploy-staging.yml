@@ -1,0 +1,192 @@
+name: Deploy Staging
+
+# Promotes an already-trusted GHCR artefact into ECR and deploys it to EKS.
+#
+#   trusted GHCR digest -> verify signature -> OIDC -> copy (no rebuild)
+#     -> ECR digest -> helm upgrade -> rollout status
+#
+# Note what this workflow does NOT do: it never builds an image, and it never
+# runs `terraform apply`. Infrastructure provisioning stays a deliberate local
+# admin activity, so the GitHub role needs no power over VPCs, IAM or RDS -
+# see cloud-learning/15-github-oidc-and-kubernetes-deployment.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_digest:
+        description: >-
+          Trusted GHCR image digest to promote, e.g. sha256:abc123...
+          Must already have passed the Stage 3 release pipeline.
+        required: true
+  push:
+    tags:
+      # Temporary, tightly-scoped training trigger, mirroring Stage 3: this
+      # branch is not the default branch, so workflow_dispatch alone is not
+      # yet available. The IAM trust policy trusts exactly this tag pattern.
+      - "stage4-deploy-*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-west-1
+  CLUSTER_NAME: notes-app-staging
+  NAMESPACE: notes-app
+  RELEASE_NAME: notes-app
+  GHCR_IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  deploy:
+    name: Promote and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      # OIDC token used to assume the AWS deploy role. No stored AWS keys
+      # exist anywhere in this repository.
+      id-token: write
+      # Needed to pull the source image from GHCR for verification/copy.
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve source digest
+        id: source
+        run: |
+          if [ -n "${{ inputs.source_digest }}" ]; then
+            DIGEST="${{ inputs.source_digest }}"
+          else
+            # Tag-triggered run: use the digest recorded in the repository so
+            # a deploy is always tied to a reviewed, committed artefact rather
+            # than "whatever is latest".
+            DIGEST="$(tr -d '[:space:]' < .github/staging-image-digest.txt)"
+          fi
+          case "$DIGEST" in
+            sha256:*) ;;
+            *) echo "::error::source digest must be a sha256: digest, got '$DIGEST'"; exit 1 ;;
+          esac
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Promoting ${{ env.GHCR_IMAGE }}@$DIGEST"
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # Never deploy an arbitrary registry tag. This proves the artefact came
+      # from this repository's Stage 3 release workflow before it goes near AWS.
+      - name: Verify the Stage 3 signature on the source image
+        run: |
+          cosign verify \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/\.github/workflows/release\.yml@.*$" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "${{ env.GHCR_IMAGE }}@${{ steps.source.outputs.digest }}"
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          # Short-lived credentials for this run only.
+          role-session-name: gha-deploy-${{ github.run_id }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        run: |
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+          echo "registry=$REGISTRY" >> "$GITHUB_OUTPUT"
+          echo "repository=${REGISTRY}/${CLUSTER_NAME}" >> "$GITHUB_OUTPUT"
+          aws ecr get-login-password --region "$AWS_REGION" \
+            | docker login --username AWS --password-stdin "$REGISTRY"
+
+      # crane copies the manifest and layers directly between registries.
+      # There is deliberately no `docker build` here: promotion must move the
+      # exact artefact that was already tested, scanned and signed - never
+      # produce a new one. See cloud-learning/09-ecr-and-artifact-promotion.md.
+      - name: Promote image to ECR (copy, never rebuild)
+        id: promote
+        run: |
+          curl -fsSL https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_x86_64.tar.gz \
+            | tar -xz crane
+          ./crane auth login ghcr.io -u "${{ github.actor }}" -p "${{ secrets.GITHUB_TOKEN }}"
+
+          SRC="${{ env.GHCR_IMAGE }}@${{ steps.source.outputs.digest }}"
+          DST="${{ steps.ecr.outputs.repository }}:sha-${GITHUB_SHA::7}"
+
+          ./crane copy "$SRC" "$DST"
+
+          ECR_DIGEST="$(./crane digest "$DST")"
+          echo "digest=$ECR_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "repository=${{ steps.ecr.outputs.repository }}" >> "$GITHUB_OUTPUT"
+
+          echo "### Image promotion" >> "$GITHUB_STEP_SUMMARY"
+          echo "- source (GHCR): \`${{ steps.source.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- promoted (ECR): \`$ECR_DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$ECR_DIGEST" = "${{ steps.source.outputs.digest }}" ]; then
+            echo "- digests identical: the same manifest bytes were copied" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- digests differ: the registry recomputed the manifest on copy; no rebuild occurred" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Read infrastructure values
+        id: infra
+        run: |
+          DB_SECRET_ARN="$(aws rds describe-db-instances \
+            --db-instance-identifier "${CLUSTER_NAME}-postgres" \
+            --query 'DBInstances[0].MasterUserSecret.SecretArn' --output text)"
+          DB_HOST="$(aws rds describe-db-instances \
+            --db-instance-identifier "${CLUSTER_NAME}-postgres" \
+            --query 'DBInstances[0].Endpoint.Address' --output text)"
+          DB_USER="$(aws rds describe-db-instances \
+            --db-instance-identifier "${CLUSTER_NAME}-postgres" \
+            --query 'DBInstances[0].MasterUsername' --output text)"
+          # ARNs, hostnames and usernames are identifiers, not secrets. The
+          # password itself is never read here - the Pod fetches it directly
+          # from Secrets Manager through the CSI driver.
+          {
+            echo "db_secret_arn=$DB_SECRET_ARN"
+            echo "db_host=$DB_HOST"
+            echo "db_user=$DB_USER"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.2.4
+
+      - name: Configure kubectl for EKS
+        run: |
+          aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"
+          kubectl config current-context
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install "$RELEASE_NAME" k8s/charts/notes-app \
+            --namespace "$NAMESPACE" \
+            --values k8s/values/staging.yaml \
+            --set image.repository="${{ steps.promote.outputs.repository }}" \
+            --set image.digest="${{ steps.promote.outputs.digest }}" \
+            --set secrets.secretArn="${{ steps.infra.outputs.db_secret_arn }}" \
+            --set config.DB_HOST="${{ steps.infra.outputs.db_host }}" \
+            --set config.DB_USER="${{ steps.infra.outputs.db_user }}" \
+            --wait --timeout 10m
+
+      # `helm --wait` returning is not proof the rollout is healthy; this makes
+      # the deployment fail loudly rather than silently leaving old Pods up.
+      - name: Verify rollout
+        run: |
+          kubectl -n "$NAMESPACE" rollout status "deployment/$RELEASE_NAME" --timeout=5m
+          kubectl -n "$NAMESPACE" get pods -o wide
+          kubectl -n "$NAMESPACE" get ingress
+
+      - name: Report application endpoint
+        run: |
+          for _ in $(seq 1 30); do
+            HOST="$(kubectl -n "$NAMESPACE" get ingress "$RELEASE_NAME" \
+              -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
+            [ -n "$HOST" ] && break
+            sleep 10
+          done
+          echo "- ALB hostname: \`${HOST:-<not ready yet>}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "ALB: ${HOST:-<not ready yet>}"
