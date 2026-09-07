@@ -8,14 +8,29 @@ The application is intentionally kept minimal. It contains only the core applica
 
 The goal is to provide a simple application that can be forked and progressively improved while learning topics such as Platform Engineering, DevOps, Infrastructure as Code, cloud infrastructure, security, monitoring, observability, and SRE.
 
-## Two learning tracks
+## Three learning tracks
 
-This repository supports two different learning paths, both grounded in this exact application.
+This repository supports three learning paths, all grounded in this exact application, each picking up where the last one left off:
+
+```text
+Track 1
+Python / FastAPI Development                (learning/)
+        ↓
+Track 2
+DevOps Pre-Containerisation                  (devops-learning/, devops/01-pre-containerisation)
+        ↓
+Track 3
+Container Engineering & Software Supply Chain (container-learning/, devops/02-containerisation-supply-chain)
+        ↓
+Next
+CI/CD, Registry, Signing & Provenance         (a later stage, not yet in this repository)
+```
 
 * **[learning/](learning/) — Application Development / FastAPI.** New to Python or FastAPI? This 22-lesson course builds this exact Notes API from an empty folder, from absolute basics through a finished, tested app with a working dashboard.
-* **[devops-learning/](devops-learning/) — DevOps / Platform Engineering.** Already have this app (or one like it)? This 14-lesson course puts you in the position of a platform/DevOps engineer *receiving* an already-built application from a development team, and walks you through understanding, analysing, and preparing it for containerisation — investigation, static and security analysis, and environment-based configuration, all *before* a single `Dockerfile` gets written.
+* **[devops-learning/](devops-learning/) — DevOps / Platform Engineering.** Already have this app (or one like it)? This 14-lesson course puts you in the position of a platform/DevOps engineer *receiving* an already-built application from a development team, and walks you through understanding, analysing, and preparing it for containerisation — investigation, static and security analysis, and environment-based configuration, all *before* a single `Dockerfile` gets written. Lives on the `devops/01-pre-containerisation` branch (and, from that branch onward).
+* **[container-learning/](container-learning/) — Container Engineering & Software Supply Chain.** Takes the clean, remediated application from Track 2 and turns it into a real, inspected, tested, scanned, hardened container artefact: a production-quality multi-stage `Dockerfile`, locked dependencies, non-root runtime, persistent storage, a `compose.yaml`, dependency/image/secret scanning (`SECURITY.md`), an SBOM, and a manual release quality gate — deliberately stopping short of CI/CD. Lives on the `devops/02-containerisation-supply-chain` branch.
 
-You don't have to complete the first track to start the second, but it helps to at least skim [learning/](learning/) so the application itself isn't unfamiliar.
+You don't have to complete one track to start the next, but each assumes familiarity with what the previous one built. Tracks 2 and 3 live on their own branches specifically so their git history can teach the *process* of hardening an application/image one deliberate step at a time - see each track's README for how to read that history.
 
 ## Why is it so minimal?
 
@@ -45,7 +60,8 @@ These are not missing features. They are intentionally left for the learning jou
 * a database-agnostic storage layer built on SQLAlchemy (`app/database.py`) — runs on SQLite *or* PostgreSQL, chosen by configuration
 * environment-based configuration (`app/config.py`, `.env.example`)
 * basic automated tests (`tests/test_notes.py`)
-* Python project configuration (`pyproject.toml`), including optional `ruff`/`bandit` dev tooling used by the DevOps track
+* Python project configuration (`pyproject.toml`) and locked dependencies (`requirements.txt`, `requirements-dev.txt`)
+* a production-quality container image (`Dockerfile`, `.dockerignore`, `compose.yaml`) and its security scanning results (`SECURITY.md`) — see the [container-learning/](container-learning/) track
 
 ## Running locally
 
@@ -94,6 +110,62 @@ pytest
 
 The tests run against a throwaway SQLite database, so no PostgreSQL server is needed to run them. The PostgreSQL configuration is covered by tests that build engines without connecting to anything (`tests/test_database_config.py`).
 
+## Running in a container
+
+On the `devops/02-containerisation-supply-chain` branch, the same application also runs as a container — see [container-learning/](container-learning/) for how the `Dockerfile` and the two Compose files got there, one deliberate step at a time.
+
+```bash
+cp .env.example .env   # first time only
+```
+
+There are **two** local modes. Both build and run the *same* image from the *same* `Dockerfile`; only the runtime topology differs.
+
+### Option 1 — SQLite (simple, the default)
+
+```bash
+docker compose up --build
+```
+
+| | |
+|---|---|
+| Database | SQLite, a single file inside the container |
+| Volume | `notes-data` (mounted at `/data`) |
+| Extra services | none |
+| Stop | `docker compose down` |
+| Delete its data | `docker compose down -v` |
+
+Nothing to install, nothing else to start. This is the right choice for most local work.
+
+### Option 2 — PostgreSQL (production-shaped)
+
+```bash
+docker compose -f compose.postgres.yaml up --build
+```
+
+| | |
+|---|---|
+| Database | PostgreSQL 17.6, in its own container |
+| Volume | `postgres-data` (PostgreSQL's data directory) |
+| Extra services | `postgres`, reached at the hostname `postgres` over the Compose network |
+| Stop | `docker compose -f compose.postgres.yaml down` |
+| Delete its data | `docker compose -f compose.postgres.yaml down -v` |
+
+Use this when you want the same database engine the cloud deployment uses — to reproduce a backend-specific bug, or to see how the application behaves when its database is a separate service that can fail independently.
+
+Either way, ask the application which backend it actually reached:
+
+```bash
+curl -s http://127.0.0.1:8000/ready
+# {"status":"ready","database":"sqlite"}      <- Option 1
+# {"status":"ready","database":"postgresql"}  <- Option 2
+```
+
+> **The two modes have separate data.** `notes-data` and `postgres-data` are independent volumes; a note created in one mode will not appear in the other. Switching backends is not a data migration. Adding `-v` to `down` **permanently deletes** that mode's volume.
+
+Both modes publish port 8000 on the host, so stop one before starting the other.
+
+The manual release quality gate (tests, linting, security scanning, image scanning, SBOM generation, plus SQLite *and* PostgreSQL smoke tests against the built image) is documented in `SECURITY.md` and wrapped in `Makefile` (`make check`) once you're comfortable with the individual commands it runs.
+
 ## API
 
 | Method | Path          | Description        |
@@ -123,13 +195,15 @@ This repository acts as a reusable starting application. A learner can fork it a
 ```text
 Local application
         ↓
-Understanding & analysing an inherited app   <- devops-learning/ covers this far
+Understanding & analysing an inherited app   (devops-learning/, devops/01-pre-containerisation)
         ↓
-Application configuration                       (devops-learning/ - complete on this branch)
+Application configuration                     (devops-learning/ - complete on that branch)
         ↓
-Containerization                                 (a later track — not yet in this repo)
+Containerization                                 (container-learning/, devops/02-containerisation-supply-chain)
         ↓
-CI/CD
+Container security, SBOMs, manual release gate     (container-learning/ - complete on that branch)   <- you are here
+        ↓
+CI/CD                                                (a later stage — not yet in this repo)
         ↓
 Infrastructure as Code
         ↓
