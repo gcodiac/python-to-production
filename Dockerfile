@@ -65,7 +65,15 @@ RUN chown -R appuser:appuser /app
 RUN mkdir -p /data && chown appuser:appuser /data
 VOLUME ["/data"]
 
-ENV PATH="/opt/venv/bin:${PATH}"
+# PYTHONDONTWRITEBYTECODE: don't write .pyc files into /opt/venv at
+# runtime - harmless either way, but pointless work once the root
+# filesystem is read-only (see compose.yaml), and keeps the image's
+# contents exactly what was built, nothing added at first import.
+# PYTHONUNBUFFERED: flush stdout/stderr immediately rather than buffering,
+# so `docker logs` shows output as it happens instead of in delayed chunks.
+ENV PATH="/opt/venv/bin:${PATH}" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
 # Numeric form, not the name - a name requires /etc/passwd to be present
 # and readable to resolve, which not every minimal base image guarantees.
