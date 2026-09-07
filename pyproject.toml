@@ -30,6 +30,13 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["app*"]
 
+[tool.setuptools.package-data]
+# Without this, `pip install .` silently drops the dashboard's HTML/CSS/JS -
+# setuptools only bundles .py files by default. Discovered while building a
+# container image that runs the installed package rather than a raw source
+# checkout - see container-learning/07-improving-the-dockerfile.md.
+app = ["static/*"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 
