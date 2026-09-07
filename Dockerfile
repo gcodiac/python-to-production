@@ -32,6 +32,17 @@ RUN pip install --no-cache-dir --no-deps . \
 
 FROM python:3.12.14-slim-bookworm
 
+# OCI image metadata - see container-learning/25-oci-image-metadata.md.
+# GIT_REVISION is a build ARG, not a LABEL baked in statically, because it's
+# only known at build time: docker build --build-arg GIT_REVISION=$(git rev-parse --short HEAD) ...
+# No org.opencontainers.image.source label - that would need a real,
+# public repository URL, and this project doesn't have one to publish yet.
+ARG GIT_REVISION=unknown
+LABEL org.opencontainers.image.title="notes-app" \
+      org.opencontainers.image.description="A minimal Notes API built with FastAPI and SQLite." \
+      org.opencontainers.image.version="0.1.0" \
+      org.opencontainers.image.revision="${GIT_REVISION}"
+
 # A dedicated, unprivileged user for the application to run as - see
 # container-learning/08-running-as-non-root.md. Container root isn't the
 # same thing as host root, but running as a named, uid-1000 user is still
