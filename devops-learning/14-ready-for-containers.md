@@ -1,4 +1,4 @@
-# Lesson 13 — Ready for Containers
+# Lesson 14 — Ready for Containers
 
 **What you'll learn:** why everything you just did was necessary preparation for containerisation specifically, and what to expect from the next stage of this course.
 
@@ -21,7 +21,7 @@ Containerising an application you don't understand just produces a container you
 | Lesson 07–09: found and externalised hard-coded configuration | This is *exactly* what becomes `docker run -e APP_ENV=production ...` or an `--env-file`, and later a Kubernetes `ConfigMap`/`Secret` — the mechanism doesn't change, only what supplies the environment variables does. |
 | Lesson 10: confirmed logs go to stdout/stderr | This is precisely what `docker logs` captures — an app that logged to a local file instead would lose its logs the moment its container was removed. |
 | Lesson 11: found the gap between "alive" and "actually working" | This becomes a container `HEALTHCHECK` instruction (or a Kubernetes liveness/readiness probe) — you already know what this app's `/health` endpoint does and does not currently verify. |
-| Lesson 12: completed an honest readiness review | This is the review you'd want to redo, briefly, right before any major infrastructure change — containerisation included. |
+| Lesson 13: completed an honest readiness review | This is the review you'd want to redo, briefly, right before any major infrastructure change — containerisation included. |
 
 ## Questions for the learner
 
@@ -31,7 +31,7 @@ Containerising an application you don't understand just produces a container you
 
 ## Practical exercise
 
-Write a short paragraph — this is the last piece of writing in this track — describing this application's current state to an imaginary teammate who's about to containerise it. Use your Lesson 12 checklist as source material. Be specific about anything you'd still flag as a caveat.
+Write a short paragraph — this is the last piece of writing in this track — describing this application's current state to an imaginary teammate who's about to containerise it. Use your Lesson 13 checklist as source material. Be specific about anything you'd still flag as a caveat.
 
 ## Verification / checkpoint
 

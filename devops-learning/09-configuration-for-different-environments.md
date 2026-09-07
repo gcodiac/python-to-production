@@ -28,7 +28,7 @@ head -5 tests/test_notes.py
 
 ### 2. Notice this is the same mechanism, applied to a different environment
 
-That line sets `NOTES_DB_PATH` to a temporary file before importing the app — meaning the **test** environment gets its own isolated database, using the *exact same application code* as development or production, purely through an environment variable. You've been looking at a working example of this whole lesson since Lesson 04.
+That line sets `DATABASE_URL` to a temporary SQLite file before importing the app — meaning the **test** environment gets its own isolated database, using the *exact same application code* as development or production, purely through an environment variable. You've been looking at a working example of this whole lesson since Lesson 04.
 
 ## Questions for the learner
 

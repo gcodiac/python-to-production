@@ -1,6 +1,6 @@
-# Lesson 12 — Pre-Containerisation Review
+# Lesson 13 — Pre-Containerisation Review
 
-**What you'll learn:** how to run a structured "handover audit" against an application, pulling together everything from Lessons 00–11 into one honest checklist.
+**What you'll learn:** how to run a structured "handover audit" against an application, pulling together everything from Lessons 00–12 into one honest checklist.
 
 ## Goal
 
@@ -30,6 +30,10 @@ Go through each item below **by actually re-running the relevant command**, not 
 [ ] I know what /health does and does not currently verify.
 [ ] I have personally observed what happens to this app when its database is unavailable.
 [ ] I know what port/host this app listens on, and by which of its (possibly inconsistent) code paths.
+[ ] I can switch this app between SQLite and PostgreSQL without editing any Python.
+[ ] The PostgreSQL driver is already a declared application dependency, not a deployment-time addition.
+[ ] I know which single function contains the only backend-specific code in the application.
+[ ] I know how a database password reaches this app without being written into Git or a manifest.
 ```
 
 ## Commands to run (re-verify, don't assume)
@@ -38,7 +42,8 @@ Go through each item below **by actually re-running the relevant command**, not 
 source .venv/bin/activate
 pytest -v
 ruff check app/
-bandit -r app/
+bandit -r app/ --severity-level medium
+pytest tests/test_database_config.py -v
 grep -rn "TRAINING-ISSUE" app/
 cat .env.example 2>/dev/null || echo "no .env.example yet"
 git status

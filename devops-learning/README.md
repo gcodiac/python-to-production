@@ -39,10 +39,12 @@ Externalise configuration
         ↓
 Improve operational readiness
         ↓
+Make the database portable
+        ↓
 Containerise   <- a later track picks up here
 ```
 
-This track covers everything down to "improve operational readiness." Containerisation, CI/CD, and cloud deployment are deliberately left for the track that follows this one — see [13-ready-for-containers.md](13-ready-for-containers.md) for why.
+This track covers everything down to "make the database portable." Containerisation, CI/CD, and cloud deployment are deliberately left for the track that follows this one — see [14-ready-for-containers.md](14-ready-for-containers.md) for why.
 
 ## Lessons
 
@@ -60,9 +62,10 @@ This track covers everything down to "improve operational readiness." Containeri
 | 09 | [Configuration for Different Environments](09-configuration-for-different-environments.md) |
 | 10 | [Logging and Operational Readiness](10-logging-and-operational-readiness.md) |
 | 11 | [Health Checks and Service Readiness](11-health-checks-and-service-readiness.md) |
-| 12 | [Pre-Containerisation Review](12-pre-containerisation-review.md) |
-| 13 | [Ready for Containers](13-ready-for-containers.md) |
+| 12 | [Designing for Database Portability](12-designing-for-database-portability.md) |
+| 13 | [Pre-Containerisation Review](13-pre-containerisation-review.md) |
+| 14 | [Ready for Containers](14-ready-for-containers.md) |
 
 ## What you'll have by the end
 
-A codebase you can genuinely explain to someone else — its structure, its dependencies, its runtime behaviour, its configuration, and its known problems — plus a working `.env`-based configuration setup you built yourself, a completed pre-containerisation checklist, and a clear picture of why each of those things matters before a single `Dockerfile` gets written.
+A codebase you can genuinely explain to someone else — its structure, its dependencies, its runtime behaviour, its configuration, and its known problems — plus a working `.env`-based configuration setup you built yourself, an application that runs on either SQLite or PostgreSQL without a code change, a completed pre-containerisation checklist, and a clear picture of why each of those things matters before a single `Dockerfile` gets written.
