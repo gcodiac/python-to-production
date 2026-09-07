@@ -28,7 +28,13 @@ variable "enabled_cluster_log_types" {
 variable "node_instance_type" {
   description = "EC2 instance type for the managed node group."
   type        = string
-  default     = "t3.medium"
+  default     = "t3.small"
+}
+
+variable "coredns_replicas" {
+  description = "CoreDNS replica count. EKS defaults to 2; a single small node cannot spare the pod slot or the memory."
+  type        = number
+  default     = 1
 }
 
 variable "node_min_size" {

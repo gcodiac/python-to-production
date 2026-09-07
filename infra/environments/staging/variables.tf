@@ -33,9 +33,22 @@ variable "kubernetes_version" {
 }
 
 variable "node_instance_type" {
-  description = "Worker node instance type. x86_64 to match the application image."
+  description = <<-EOT
+    Worker node instance type. x86_64, to match the amd64 application image.
+
+    t3.small rather than the more comfortable t3.medium because this AWS
+    account is Free Tier restricted and rejects non-free-tier-eligible types
+    with "InvalidParameterCombination - The specified instance type is not
+    eligible for Free Tier". Check what an account actually allows with:
+
+      aws ec2 describe-instance-types --region eu-west-1 \
+        --filters "Name=free-tier-eligible,Values=true"
+
+    t3.small caps out around 11 pods, which is why CoreDNS is reduced to a
+    single replica below - see cloud-learning/07.
+  EOT
   type        = string
-  default     = "t3.medium"
+  default     = "t3.small"
 }
 
 variable "node_min_size" {
