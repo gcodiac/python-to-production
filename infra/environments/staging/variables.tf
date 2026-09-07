@@ -99,12 +99,6 @@ variable "application_service_account" {
   default     = "notes-app"
 }
 
-variable "github_repository" {
-  description = "GitHub repository trusted for OIDC, as owner/name."
-  type        = string
-  default     = "gcodiac/python-to-production"
-}
-
 variable "github_oidc_subject_prefix" {
   description = <<-EOT
     The exact prefix GitHub puts in the OIDC token's `sub` claim for this
