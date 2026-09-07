@@ -33,3 +33,7 @@ htmlcov/
 # Local reference/teaching material - not part of this branch's history
 /original/
 /learning/
+
+# Generated scan/SBOM output (pip-audit, Trivy, Syft, Grype) - reproducible
+# from the commands in SECURITY.md and container-learning/, not committed.
+/reports/
