@@ -70,6 +70,48 @@ everything (missing non-root user, missing dependency-layer caching) the way
 a broader review does - the same lesson Stage 1 taught about Ruff vs.
 SonarQube, applied to Dockerfiles.
 
+## Software Bill of Materials (Syft) and SBOM-driven analysis (Grype)
+
+```bash
+syft dir:. --source-name notes-app --source-version 0.1.0 \
+    -o cyclonedx-json=reports/sbom.cdx.json \
+    -o spdx-json=reports/sbom.spdx.json
+
+grype sbom:reports/sbom.cdx.json
+```
+
+An SBOM answers a question none of the tools above can: *if a critical
+vulnerability is disclosed tomorrow in some component, do I even contain
+that component, and where?* See `container-learning/17-generating-an-sbom.md`.
+
+Both an industry-standard CycloneDX JSON and an SPDX JSON SBOM are generated
+(neither is committed - regenerate them from source with the commands
+above; see `reports/`). This SBOM inventories this project's *Python
+dependency footprint from source* (`requirements.txt` +
+`requirements-dev.txt`) - it does not include the base OS packages that only
+exist once an image is actually built. A full image SBOM (`syft
+notes-app:local`) is the more complete version of this exercise once you
+have a working Docker install; the commands are otherwise identical.
+
+**Result (most recent run): Grype found no vulnerabilities in the generated
+SBOM.**
+
+## Tool overlap, on purpose
+
+This project does not run every scanner that exists. For this size of
+project:
+
+* **Trivy** is the primary, general-purpose container/source scanner
+  (vulnerabilities + secrets + misconfiguration in one tool).
+* **Syft** is used specifically to produce a portable, standard SBOM
+  artefact - not just a scan result.
+* **Grype** demonstrates vulnerability analysis *driven by* an SBOM/manifest
+  rather than by re-scanning source directly - a different workflow, useful
+  once SBOMs already exist for other reasons (compliance, inventory).
+
+A real organisation would not necessarily run all three in production; here,
+each earns its place by teaching a distinct concept.
+
 ## What this project deliberately did not need to fix
 
 Every scan above came back clean. That is reported here as a genuine result,
