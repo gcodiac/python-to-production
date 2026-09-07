@@ -1,0 +1,100 @@
+# Defaults. Environment-specific values live in k8s/values/<env>.yaml, and
+# the image digest is supplied by CI at deploy time.
+#
+# Nothing secret belongs in this file, or in any values file: the database
+# password reaches the Pod only via the Secrets Store CSI mount.
+
+replicaCount: 1
+
+image:
+  repository: ""
+  # Deployment is by immutable digest, never a mutable tag. CI sets this.
+  digest: ""
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  # Name must match the EKS Pod Identity association created in Terraform,
+  # which is what grants this Pod permission to read its database secret.
+  name: notes-app
+  create: true
+
+# Non-secret runtime configuration, rendered into a ConfigMap.
+config:
+  APP_ENV: staging
+  LOG_LEVEL: INFO
+  APP_HOST: "0.0.0.0"
+  APP_PORT: "8000"
+  DB_PORT: "5432"
+  DB_NAME: notes
+  DB_USER: ""
+  DB_HOST: ""
+  DB_SSLMODE: require
+
+# Where the CSI driver mounts the secret, and where the app reads it from.
+secrets:
+  mountPath: /mnt/secrets
+  # Secrets Manager ARN of the RDS-managed credentials (not a secret itself).
+  secretArn: ""
+  # Key inside the RDS secret JSON holding the password.
+  passwordKey: password
+  fileName: db_password
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    # Route straight to Pod IPs rather than via NodePort - fewer hops, and
+    # the ALB health-checks the actual Pod.
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# Liveness must not depend on the database; readiness must.
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 20
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    path: /ready
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# Matches the namespace's `restricted` Pod Security Admission level.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+strategy:
+  type: RollingUpdate
+  maxUnavailable: 0
+  maxSurge: 1

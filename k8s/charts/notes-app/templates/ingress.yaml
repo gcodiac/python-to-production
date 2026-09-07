@@ -1,0 +1,27 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "notes-app.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "notes-app.labels" . | nindent 4 }}
+  annotations:
+    {{- toYaml .Values.ingress.annotations | nindent 4 }}
+# Creating this object is what causes the AWS Load Balancer Controller to
+# create a real ALB. Deleting it is what removes that ALB - which is why the
+# Ingress must be deleted BEFORE the cluster during teardown, or the ALB is
+# orphaned and keeps billing (see cloud-learning/17).
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "notes-app.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}

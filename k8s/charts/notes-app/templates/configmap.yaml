@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "notes-app.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "notes-app.labels" . | nindent 4 }}
+# Non-secret configuration only. The database password is deliberately absent:
+# it arrives as a mounted file from Secrets Manager, never as env/ConfigMap.
+data:
+  {{- range $key, $value := .Values.config }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  DB_PASSWORD_FILE: {{ printf "%s/%s" .Values.secrets.mountPath .Values.secrets.fileName | quote }}
