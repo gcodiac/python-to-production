@@ -34,3 +34,17 @@ def create_note(note: NoteCreate):
         return dict(row)
     finally:
         connection.close()
+
+
+@app.get("/notes/{note_id}", response_model=Note)
+def get_note(note_id: int):
+    connection = get_connection()
+    try:
+        row = connection.execute(
+            "SELECT * FROM notes WHERE id = ?", (note_id,)
+        ).fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Note not found")
+        return dict(row)
+    finally:
+        connection.close()
