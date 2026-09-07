@@ -13,7 +13,7 @@ Real prices, eu-west-1, verified via the AWS Pricing API where noted:
 | Component | Rate | ~Monthly |
 |---|---|---|
 | EKS control plane | $0.10/hour | **$73.00** |
-| EC2 worker (t3.medium ×1) | $0.0456/hour | **$33.29** |
+| EC2 worker (t3.small ×1) | $0.0228/hour | **$16.64** |
 | EBS gp3 root, 20 GiB | ~$0.084/GiB-month | ~$1.70 |
 | RDS db.t4g.micro | $0.017/hour | **$12.41** |
 | RDS gp3 storage, 20 GiB | ~$0.127/GiB-month | ~$2.54 |
@@ -22,7 +22,9 @@ Real prices, eu-west-1, verified via the AWS Pricing API where noted:
 | Secrets Manager (1 secret) | $0.40/month | $0.40 |
 | ECR + S3 state | usage-based | <$0.25 |
 
-**≈ $155/month, or ~$0.21/hour.**
+**≈ $138/month, or ~$0.19/hour.**
+
+The worker is a t3.small rather than the t3.medium originally planned, because this AWS account is Free Tier restricted and rejects other instance types outright - see the debugging walkthrough in Lesson 07. That constraint happened to *reduce* cost, at the price of a tight ~11-pod ceiling.
 
 The uncomfortable part: **the EKS control plane bills from the moment the cluster exists**, whether or not a single Pod runs on it. An idle forgotten cluster is ~$2.40/day.
 
