@@ -48,8 +48,15 @@ jobs:
       - name: pytest
         run: pytest
 
+      # --severity-level medium: Bandit exits non-zero on ANY finding by
+      # default, including the one low-severity, already-reviewed finding
+      # documented in SECURITY.md (a dev-only placeholder that the code
+      # guarantees is unreachable in production). Blocking on medium+ and
+      # reporting/documenting lower severities is the same policy this
+      # project already applies to Trivy - see
+      # cicd-learning/03-security-and-dependency-gates.md.
       - name: Bandit (source security patterns)
-        run: bandit -r app/
+        run: bandit -r app/ --severity-level medium
 
       - name: pip-audit (known-vulnerable dependencies)
         run: |
