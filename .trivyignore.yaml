@@ -1,0 +1,103 @@
+# Reviewed and accepted Trivy findings.
+#
+# Every entry here is a decision, not a way to make the output green. Each one
+# records what the finding is, why it is accepted, and what would change the
+# answer - see cloud-learning/14-kubernetes-workload-security.md.
+#
+# Anything NOT listed here still fails the build.
+
+misconfigurations:
+  - id: AWS-0164
+    paths:
+      - "infra/modules/network/main.tf"
+    statement: >-
+      "Subnet associates public IP address" on the two public subnets.
+      Accepted, and architectural rather than accidental: this sandbox
+      deliberately has no NAT Gateway (roughly $35/month plus data processing
+      charges), so the single EKS worker node needs a public IP for outbound
+      access to pull images and reach the EKS control plane. Inbound access is
+      still denied - the node has no SSH key, no port 22, and no inbound
+      application ports; all application traffic arrives via the ALB. RDS is
+      in genuinely isolated subnets with no internet route at all. A
+      production build would place nodes in private subnets with a NAT Gateway
+      or VPC endpoints, at which point this finding should be fixed rather
+      than accepted.
+
+  - id: AWS-0040
+    paths:
+      - "infra/modules/eks/main.tf"
+    statement: >-
+      "Public cluster access is enabled" on the EKS API endpoint. Accepted for
+      this course: GitHub-hosted Actions runners have no route into the VPC,
+      so they can only run `helm upgrade` against a publicly-reachable
+      Kubernetes API. This is NOT anonymous access - every request is still
+      authenticated by AWS IAM and authorised by an EKS access entry, and the
+      GitHub role's entry is scoped to the notes-app namespace only.
+      Production alternatives (private endpoint plus self-hosted runners, a
+      VPN, or Direct Connect) are taught in
+      cloud-learning/15-github-oidc-and-kubernetes-deployment.md but not built
+      here, because each one adds cost and infrastructure this sandbox does
+      not need.
+
+  - id: AWS-0041
+    paths:
+      - "infra/modules/eks/main.tf"
+    statement: >-
+      "Cluster allows access from a public CIDR: 0.0.0.0/0". Accepted, and the
+      weakest point in this architecture - stated plainly rather than hidden.
+      GitHub-hosted runners come from a large, frequently-changing set of
+      egress addresses, so a meaningful CIDR allow-list is impractical without
+      self-hosted runners. The `public_access_cidrs` variable exists precisely
+      so this can be tightened: an organisation with fixed egress IPs or
+      self-hosted runners should set it and remove this exception.
+      Authentication (IAM) and authorisation (namespace-scoped access entry)
+      remain in force regardless.
+
+  - id: AWS-0039
+    paths:
+      - "infra/modules/eks/main.tf"
+    statement: >-
+      "Cluster does not have secret encryption enabled" (EKS envelope
+      encryption of Kubernetes Secrets with a customer-managed KMS key).
+      Accepted here because this architecture deliberately stores no
+      application secrets in Kubernetes at all: the database password is
+      mounted directly from AWS Secrets Manager by the Secrets Store CSI
+      driver, with syncSecret disabled, so it never becomes a Kubernetes
+      Secret object in etcd. Production should still enable this as defence in
+      depth (roughly $1/month for the KMS key) for any Secret that other
+      components create.
+
+  - id: AWS-0132
+    paths:
+      - "infra/bootstrap/main.tf"
+    statement: >-
+      "Bucket does not encrypt data with a customer managed key" on the
+      Terraform state bucket. Accepted: the bucket IS encrypted at rest, with
+      SSE-S3 (AES256), plus versioning, full public-access blocking and
+      bucket-owner-enforced ownership. A customer-managed KMS key would add
+      key rotation and per-request access auditing for roughly $1/month plus
+      request charges - worth it for production state containing real
+      infrastructure detail, and the documented upgrade path here.
+
+  - id: KSV-0109
+    paths:
+      - ".rendered/notes-app.yaml"
+    statement: >-
+      "ConfigMap stores secrets in key DB_PASSWORD_FILE". False positive from
+      substring matching on "PASSWORD". The value is a filesystem PATH
+      (/mnt/secrets/db_password), not a credential. The actual password is
+      never in a ConfigMap, a Helm value, an environment variable, or Git - it
+      is mounted from AWS Secrets Manager by the Secrets Store CSI driver and
+      read from that file at connection time. The "_FILE" suffix is the
+      conventional way to pass a secret path (the official PostgreSQL image
+      uses POSTGRES_PASSWORD_FILE the same way), so the name is kept and the
+      finding is documented instead.
+
+  - id: KSV-01010
+    paths:
+      - ".rendered/notes-app.yaml"
+    statement: >-
+      "ConfigMap stores sensitive contents in APP_PORT, DB_PORT, LOG_LEVEL".
+      False positive. A port number and a log level are not sensitive; they
+      are exactly the kind of non-secret runtime configuration a ConfigMap
+      exists to hold. No credential, token, or key is present.

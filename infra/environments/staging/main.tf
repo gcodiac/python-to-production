@@ -37,9 +37,12 @@ resource "aws_ecr_repository" "app" {
   image_tag_mutability = "IMMUTABLE"
 
   image_scanning_configuration {
-    # Basic scanning only. Enhanced scanning routes through Amazon Inspector
-    # and bills per image; Trivy already covers this course's scanning needs.
-    scan_on_push = false
+    # ECR BASIC scanning is free, so there is no reason not to enable it -
+    # it is a second opinion alongside the Trivy scan the release pipeline
+    # already runs. What this does NOT enable is ENHANCED scanning, which
+    # routes through Amazon Inspector and bills per image; that stays off,
+    # and is a registry-level setting this configuration never turns on.
+    scan_on_push = true
   }
 
   encryption_configuration {

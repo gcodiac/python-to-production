@@ -54,3 +54,4 @@ terraform.rc
 # Kubernetes / Helm
 kubeconfig
 kubeconfig-*
+.rendered/
