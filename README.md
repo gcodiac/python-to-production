@@ -8,91 +8,112 @@ Each stage of that journey lives on its own branch, and the **git history is the
 flowchart LR
     M["main<br/><i>the application</i>"] --> S1["Stage 1<br/>portable app"]
     S1 --> S2["Stage 2<br/>containers"]
-    S2 --> S3["<b>Stage 3</b><br/>CI/CD"]
-    S3 --> S4["Stage 4<br/>AWS + EKS"]
+    S2 --> S3["Stage 3<br/>CI/CD"]
+    S3 --> S4["<b>Stage 4</b><br/>AWS + EKS"]
     S4 --> S5["Stage 5<br/>SRE"]
-    style S3 stroke:#2f81f7,stroke-width:4px
+    style S4 stroke:#2f81f7,stroke-width:4px
 ```
 
-**You are on Stage 3** (`devops/03-cicd`): every gate Stage 2 taught you to run by hand now runs automatically, on real GitHub Actions, against this actual repository — including a genuine failure that had to be found and fixed.
+**You are on Stage 4** (`devops/04-cloud-infrastructure`): the trusted artefact from Stage 3 gets somewhere real to run — a VPC, an EKS cluster, an ALB, and a managed PostgreSQL database, all defined in Terraform and deployed by GitHub Actions with **no stored AWS credentials**.
 
-## Two pipelines
+## The architecture
 
 ```mermaid
-flowchart TD
-    PR["Pull request"] --> Q["ruff · pytest (SQLite)<br/>bandit · pip-audit"]
-    Q --> PGT["pytest (PostgreSQL)<br/><i>service container</i>"]
-    Q --> HL["hadolint"]
-    PGT --> BS["build · trivy<br/>smoke test SQLite + PostgreSQL"]
-    HL --> BS
-    BS --> X(["nothing is published"])
+flowchart TB
+    U["Internet"] --> ALB["Application Load Balancer<br/><i>created by the Ingress, not by Terraform</i>"]
 
-    TAG["Release trigger"] --> B["build <b>ONCE</b>"]
-    B --> SC["trivy scan"]
-    SC --> SM["smoke test<br/>SQLite + PostgreSQL"]
-    SM --> P["push to GHCR"]
-    P --> SBOM["SBOM"] --> PROV["provenance"] --> SIG["cosign sign"] --> V["verify"]
-    V --> D(["immutable digest"])
-    style D stroke:#2f81f7,stroke-width:3px
+    subgraph vpc["VPC 10.20.0.0/16 · eu-west-1"]
+        subgraph pub["public subnets"]
+            ALB --> POD["notes-app Pod<br/><i>non-root, read-only, restricted PSA</i>"]
+        end
+        subgraph iso["isolated subnets · no internet route"]
+            RDS[("RDS PostgreSQL 17<br/>db.t4g.micro")]
+        end
+        POD -->|"TCP 5432"| RDS
+    end
+
+    SM["Secrets Manager"] -.->|"CSI mount<br/>via Pod Identity"| POD
+    ECR["private ECR"] -.->|"image by digest"| POD
 ```
 
-A pull request proves the image *can* be built and works. Only a release publishes — and it publishes **the exact image it just tested**, never a rebuild.
+No NAT gateway, no public database, and the password never becomes an environment variable — it arrives as a **file** the Secrets Store CSI driver mounts into the Pod.
 
-## Two test tiers
+## The database change is boring, on purpose
+
+```bash
+git diff --stat devops/03-cicd..devops/04-cloud-infrastructure -- app/ tests/ pyproject.toml
+```
+
+That prints **nothing**. This entire stage changes zero lines of application code.
 
 ```mermaid
 flowchart LR
-    T1["pytest · SQLite<br/><i>seconds, no services</i>"] --> T2["pytest · PostgreSQL<br/><i>service container</i>"]
-    T2 --> T3["<b>built image</b> · PostgreSQL<br/><i>API write verified with psql</i>"]
-    style T3 stroke:#2f81f7,stroke-width:3px
+    subgraph same["identical"]
+        A["app code"] --- B["image"] --- C["psycopg driver"] --- D["SQLAlchemy engine"]
+    end
+    subgraph diff["all that changes"]
+        E["DB host"] --- F["credential delivery"]
+    end
 ```
 
-The same test files run twice — only `DATABASE_URL` changes. The strongest check is the third: the artefact about to be published is run against a real database, and the row it writes over HTTP is read back out with `psql`.
+The app became database-agnostic in Stage 1, developers ran it on PostgreSQL from Stage 2, and CI proved both backends from Stage 3. So RDS is a **different hostname**, not a migration. Every problem you hit here is a networking, IAM, or secrets problem — which is exactly what you came to learn.
 
-SQLite keeps the inner loop fast; PostgreSQL keeps the fidelity honest. **Parity is not identity** — CI is the right place to pay for the slow one.
-
-## Trust, not just automation
+## Build once, promote many
 
 ```mermaid
 flowchart LR
-    S["source commit"] --> I["image digest"]
-    I --> SB["SBOM<br/><i>what is inside</i>"]
-    I --> PR2["provenance<br/><i>where it came from</i>"]
-    I --> SG["signature<br/><i>who built it</i>"]
+    G["GHCR digest<br/><i>signed in Stage 3</i>"] --> V["cosign verify"]
+    V --> O["GitHub OIDC<br/><i>no stored keys</i>"]
+    O --> C["crane copy<br/><b>no rebuild</b>"]
+    C --> E["private ECR<br/>same digest"]
+    E --> H["helm upgrade"] --> K["EKS rollout"]
+    style C stroke:#2f81f7,stroke-width:3px
 ```
 
-Keyless signing via GitHub's OIDC token — **no private key exists anywhere**. Verification checks the signature was made by *this repository's release workflow*, not merely by "someone":
+The bytes deployed to EKS are the bytes that were scanned, tested and signed. Nothing is rebuilt for AWS, and Kubernetes deploys **by digest**, never by tag — the Helm chart refuses to render without one.
+
+## Bring it up
 
 ```bash
-cosign verify \
-  --certificate-identity-regexp "^https://github.com/<owner>/<repo>/\.github/workflows/release\.yml@.*$" \
-  --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-  ghcr.io/<owner>/<repo>@sha256:<digest>
+cd infra/environments/staging && terraform apply   # VPC, EKS, node group, RDS, ECR, IAM
+cd ../../platform/staging     && terraform apply   # LB controller, Secrets CSI driver
+aws eks update-kubeconfig --region eu-west-1 --name notes-app-staging
 ```
 
-## Look at the real runs
+Then deploy the trusted image (CI does the promotion; nothing is built locally):
 
 ```bash
-gh run list --limit 10
-gh run view <id> --log
+git tag stage4-deploy-N && git push origin stage4-deploy-N
+kubectl -n notes-app get pods,ingress
 ```
 
-Nothing in this stage is illustrative YAML. Every workflow here has been executed, observed, and fixed where it broke.
+> 💸 This is a real AWS account. Roughly **$0.20/hour** with EKS, a `t3.small` node, RDS and an ALB. Tear down when you're done — order matters, see [cloud-learning/17](cloud-learning/17-costs-production-tradeoffs-and-teardown.md).
+
+## Deliberate trade-offs
+
+| Choice | Why | Production would |
+|---|---|---|
+| EKS, not ECS Fargate | the course is about Kubernetes | genuinely reconsider — see [lesson 02](cloud-learning/02-ecs-vs-eks-choosing-a-runtime.md) |
+| No NAT gateway | ~$32/month for a sandbox | add one, keep nodes private |
+| Public EKS endpoint | no bastion in a sandbox | private endpoint + VPN |
+| Single-AZ RDS, 1-day backups | Free Tier limits | Multi-AZ, longer retention, deletion protection |
+| No managed observability | it bills per metric | Stage 5 adds self-managed Prometheus/Grafana |
+
+Accepted scanner findings are documented one-by-one in [`.trivyignore.yaml`](.trivyignore.yaml) — never blanket-suppressed.
 
 ## What this stage added
 
 | | |
 |---|---|
-| **`pr-checks.yml`** | lint, tests on both databases, Dockerfile lint, build, scan, two smoke tests |
-| **`release.yml`** | build once → scan → test → GHCR → SBOM → provenance → sign → verify |
-| **`infra-checks.yml`** | (from Stage 4) Terraform and Helm validation, no AWS credentials |
-| **Hardening** | every action pinned to a commit SHA, least-privilege `permissions:`, concurrency control |
-| **`dependabot.yml`** | automated dependency and action updates |
+| **`infra/`** | S3-backed state, VPC, EKS 1.36, managed node group, RDS, ECR, IAM/OIDC |
+| **`k8s/`** | Helm chart with digest enforcement, Pod Identity, CSI secret mount |
+| **Access** | EKS Access Entries (not `aws-auth`), Pod Identity (not IRSA) |
+| **Deploy** | `deploy-staging.yml` — verify signature → OIDC → promote → `helm upgrade` |
 
 ## Next
 
-📘 **[cicd-learning/](cicd-learning/)** — the 17-lesson course for this stage, from pipeline triggers to signing, provenance, and debugging CI for real.
+📘 **[cloud-learning/](cloud-learning/)** — the 18-lesson course for this stage, including an honest look at why ECS might have been the better call.
 
 📄 **[README-extended.md](README-extended.md)** — the long version, with full rationale.
 
-▶️ **Stage 4** — `devops/04-cloud-infrastructure`, where this trusted digest gets promoted into AWS and actually runs.
+▶️ **Stage 5** — SRE and self-managed observability. Not in this repository yet.

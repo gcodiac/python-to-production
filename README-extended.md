@@ -8,9 +8,9 @@ The application is intentionally kept minimal. It contains only the core applica
 
 The goal is to provide a simple application that can be forked and progressively improved while learning topics such as Platform Engineering, DevOps, Infrastructure as Code, cloud infrastructure, security, monitoring, observability, and SRE.
 
-## Four learning tracks
+## Five learning tracks
 
-This repository supports four learning paths, all grounded in this exact application, each picking up where the last one left off:
+This repository supports five learning paths, all grounded in this exact application, each picking up where the last one left off:
 
 ```text
 Track 1
@@ -25,16 +25,20 @@ Container Engineering & Supply Chain           (container-learning/, devops/02-c
 Track 4
 CI/CD, Registry, Signing & Provenance          (cicd-learning/, devops/03-cicd)
         ↓
-NEXT
-Cloud Infrastructure & Deployment              (a later stage, not yet in this repository)
+Track 5
+AWS, Terraform, Kubernetes & EKS               (cloud-learning/, devops/04-cloud-infrastructure)
+        ↓
+FINAL
+SRE / Production Operations                    (a later stage, not yet in this repository)
 ```
 
 * **[learning/](learning/) — Application Development / FastAPI.** New to Python or FastAPI? This 22-lesson course builds this exact Notes API from an empty folder, from absolute basics through a finished, tested app with a working dashboard.
 * **[devops-learning/](devops-learning/) — DevOps / Platform Engineering.** Already have this app (or one like it)? This 14-lesson course puts you in the position of a platform/DevOps engineer *receiving* an already-built application from a development team, and walks you through understanding, analysing, and preparing it for containerisation — investigation, static and security analysis, and environment-based configuration, all *before* a single `Dockerfile` gets written. Lives on the `devops/01-pre-containerisation` branch (and, from that branch onward).
 * **[container-learning/](container-learning/) — Container Engineering & Software Supply Chain.** Takes the clean, remediated application from Track 2 and turns it into a real, inspected, tested, scanned, hardened container artefact: a production-quality multi-stage `Dockerfile`, locked dependencies, non-root runtime, persistent storage, a `compose.yaml`, dependency/image/secret scanning (`SECURITY.md`), an SBOM, and a manual release quality gate — deliberately stopping short of CI/CD. Lives on the `devops/02-containerisation-supply-chain` branch.
 * **[cicd-learning/](cicd-learning/) — CI/CD, Registry, Signing & Provenance.** Automates Track 3's manual release gate with real GitHub Actions against this repository's actual GitHub remote: pull-request quality/security gates, a build-once/scan/publish-to-GHCR/SBOM/provenance/cosign-signing release workflow, and Dependabot — verified with real, observed Actions runs (including a genuine failure that was found and fixed), not just written YAML. Lives on the `devops/03-cicd` branch, with an open, unmerged Pull Request (#1) against `devops/02-containerisation-supply-chain`.
+* **[cloud-learning/](cloud-learning/) — AWS, Terraform, Kubernetes & EKS.** Takes the trusted artefact from Track 4 and actually runs it: a real VPC, EKS cluster, managed node group, private ECR, and RDS PostgreSQL, all defined in Terraform, with the application deployed by Helm from GitHub Actions using OIDC (no stored AWS keys) and reading its database password from Secrets Manager via EKS Pod Identity. Includes an honest lesson on why ECS Fargate would arguably be the better engineering choice for an app this small, and why the course chooses EKS anyway. Lives on the `devops/04-cloud-infrastructure` branch.
 
-You don't have to complete one track to start the next, but each assumes familiarity with what the previous one built. Tracks 2, 3, and 4 live on their own branches specifically so their git history can teach the *process* of hardening an application/image/pipeline one deliberate step at a time - see each track's README for how to read that history.
+You don't have to complete one track to start the next, but each assumes familiarity with what the previous one built. Tracks 2, 3, 4 and 5 live on their own branches specifically so their git history can teach the *process* of hardening an application/image/pipeline one deliberate step at a time - see each track's README for how to read that history.
 
 ## Why is it so minimal?
 
@@ -67,6 +71,7 @@ These are not missing features. They are intentionally left for the learning jou
 * Python project configuration (`pyproject.toml`) and locked dependencies (`requirements.txt`, `requirements-dev.txt`)
 * a production-quality container image (`Dockerfile`, `.dockerignore`, `compose.yaml`) and its security scanning results (`SECURITY.md`) — see the [container-learning/](container-learning/) track
 * real GitHub Actions CI/CD (`.github/workflows/`) and dependency-update automation (`.github/dependabot.yml`) — see the [cicd-learning/](cicd-learning/) track
+* AWS infrastructure as code (`infra/`) and Kubernetes packaging (`k8s/`) for a real EKS deployment — see the [cloud-learning/](cloud-learning/) track
 
 ## Running locally
 
