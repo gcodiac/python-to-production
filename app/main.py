@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
 from app.config import APP_ENV, APP_HOST, APP_PORT, LOG_LEVEL
-from app.database import get_connection
+from app.database import DatabaseUnavailableError, get_connection
 from app.models import Note, NoteCreate, NoteUpdate
 
 logging.basicConfig(level=LOG_LEVEL)
@@ -36,9 +36,16 @@ def get_db():
 
     Centralising connection acquisition/cleanup here means every endpoint
     below just declares a `DbConnection` parameter instead of repeating the
-    same acquire/try/finally-close block five times.
+    same acquire/try/finally-close block five times. It also means a
+    database failure produces one clear, understandable 503 response instead
+    of an unhandled 500 traceback leaking out of whichever endpoint happened
+    to touch the database first.
     """
-    connection = get_connection()
+    try:
+        connection = get_connection()
+    except DatabaseUnavailableError as exc:
+        logger.error("Database unavailable: %s", exc)
+        raise HTTPException(status_code=503, detail="Database unavailable") from exc
     try:
         yield connection
     finally:
@@ -101,8 +108,34 @@ def delete_note(note_id: int, connection: DbConnection):
 
 @app.get("/health")
 def health_check():
-    """Basic liveness/readiness signal for load balancers, orchestrators, etc."""
+    """Liveness: is this process alive and serving HTTP?
+
+    Deliberately does NOT touch the database. A liveness check that fails
+    during a transient database outage would tell an orchestrator to restart
+    a perfectly healthy process, turning a brief database blip into a crash
+    loop - see devops-learning/11-health-checks-and-service-readiness.md.
+    """
     return {"status": "ok", "environment": APP_ENV}
+
+
+@app.get("/ready")
+def readiness_check():
+    """Readiness: can this instance actually serve requests right now?
+
+    Unlike /health, this does check the database, because an instance that
+    cannot reach its database should be taken out of a load balancer's
+    rotation - without being restarted.
+    """
+    try:
+        connection = get_connection()
+    except DatabaseUnavailableError as exc:
+        logger.warning("Readiness check failed: %s", exc)
+        raise HTTPException(status_code=503, detail="Database unavailable") from exc
+    try:
+        connection.execute("SELECT 1")
+    finally:
+        connection.close()
+    return {"status": "ready"}
 
 
 STATIC_DIR = Path(__file__).parent / "static"
