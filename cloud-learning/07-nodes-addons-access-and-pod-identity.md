@@ -12,8 +12,61 @@ Explain how the Notes Pod is allowed to read one Secrets Manager secret and noth
 grep -A20 'resource "aws_eks_node_group"' ../infra/modules/eks/main.tf
 ```
 
-* **t3.medium** — 2 vCPU / 4 GiB, x86_64 (the application image is amd64 only, so Graviton/ARM instances are not an option without a multi-arch build). $0.0456/hour in eu-west-1.
+* **t3.small** — 2 vCPU / 2 GiB, x86_64 (the application image is amd64 only, so Graviton/ARM instances are not an option without a multi-arch build). $0.0228/hour in eu-west-1.
 * **min 1 / desired 1 / max 2** — a deliberate cost ceiling. Nothing autoscales.
+
+### A real failure worth learning from
+
+The first attempt used `t3.medium`. The node group sat in `CREATING` for 17 minutes and never produced an instance. `describe-nodegroup` reported no health issues, and no EC2 instance ever appeared — not even a terminated one.
+
+The answer was in the Auto Scaling group's activity history, not in EKS:
+
+```bash
+ASG=$(aws eks describe-nodegroup --cluster-name notes-app-staging \
+  --nodegroup-name notes-app-staging-ng --region eu-west-1 \
+  --query 'nodegroup.resources.autoScalingGroups[0].name' --output text)
+
+aws autoscaling describe-scaling-activities --region eu-west-1 \
+  --auto-scaling-group-name "$ASG" \
+  --query 'Activities[].StatusMessage'
+```
+
+```text
+Could not launch On-Demand Instances. InvalidParameterCombination -
+The specified instance type is not eligible for Free Tier.
+```
+
+The AWS account was **Free Tier restricted** and simply refused to launch a non-free-tier instance type. EKS surfaced this only as "still creating".
+
+**The debugging lesson:** when a managed service stalls, find the layer that is actually doing the work. EKS delegates instance launching to an Auto Scaling group, and the ASG had the real error all along.
+
+Check what an account actually permits before choosing:
+
+```bash
+aws ec2 describe-instance-types --region eu-west-1 \
+  --filters "Name=free-tier-eligible,Values=true" \
+  --query 'InstanceTypes[].{type:InstanceType,vcpu:VCpuInfo.DefaultVCpus,mem:MemoryInfo.SizeInMiB}' \
+  --output table
+```
+
+### Living within 11 pods
+
+t3.small's ENI limits allow roughly **11 pods** — `ENIs × (IPs per ENI - 1) + 2`, or `3 × (4-1) + 2`. Check any type with:
+
+```bash
+aws ec2 describe-instance-types --region eu-west-1 --instance-types t3.small \
+  --query 'InstanceTypes[0].NetworkInfo.{enis:MaximumNetworkInterfaces,ips:Ipv4AddressesPerInterface}'
+```
+
+The workload needs roughly: aws-node, kube-proxy, eks-pod-identity-agent (all DaemonSets), CoreDNS, the AWS Load Balancer Controller, two Secrets Store CSI components, and the application — plus **one spare slot during a rolling update**.
+
+That is why CoreDNS is reduced from its default 2 replicas to 1:
+
+```bash
+grep -B6 -A4 "configuration_values" ../infra/modules/eks/main.tf
+```
+
+On a single-node cluster the second CoreDNS replica would sit `Pending` regardless, because its default anti-affinity prefers a separate node. Production with multiple nodes should keep 2.
 * **ON_DEMAND** — predictable for training. Spot is roughly 70% cheaper and excellent for fault-tolerant or non-critical workloads, but instances can be reclaimed at two minutes' notice, which is a poor property for a single-node teaching cluster.
 
 Not used, and taught conceptually only: **Cluster Autoscaler**, **Karpenter**, **EKS Auto Mode**, **EKS Fargate**. Each removes visibility of exactly the mechanics this lesson exists to show.
