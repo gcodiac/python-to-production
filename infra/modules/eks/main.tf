@@ -221,6 +221,15 @@ resource "aws_eks_addon" "coredns" {
   addon_name    = "coredns"
   addon_version = data.aws_eks_addon_version.this["coredns"].version
 
+  # EKS ships CoreDNS with 2 replicas for availability. A single t3.small
+  # worker has roughly 11 pod slots and 2 GiB of RAM, and the second replica
+  # would sit permanently Pending on a one-node cluster anyway (the default
+  # anti-affinity prefers separate nodes). Production with multiple nodes
+  # should keep 2.
+  configuration_values = jsonencode({
+    replicaCount = var.coredns_replicas
+  })
+
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
 
