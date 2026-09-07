@@ -54,6 +54,17 @@ COPY --from=builder /opt/venv /opt/venv
 # set) resolves to a relative "./notes.db" path under here.
 RUN chown -R appuser:appuser /app
 
+# A container's own writable layer is thrown away with the container - see
+# container-learning/10-persistent-data-and-sqlite.md. /data is this
+# image's documented, explicit location for anything that must survive a
+# container being replaced. The image only prepares the directory and its
+# ownership; it deliberately does NOT set DATABASE_URL itself (that would
+# be baking an environment-specific value into the image) - whoever runs
+# this image decides whether /data is a named volume, a bind mount, or left
+# as ordinary (non-persistent) container storage.
+RUN mkdir -p /data && chown appuser:appuser /data
+VOLUME ["/data"]
+
 ENV PATH="/opt/venv/bin:${PATH}"
 
 # Numeric form, not the name - a name requires /etc/passwd to be present
