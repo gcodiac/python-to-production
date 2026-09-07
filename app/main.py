@@ -85,3 +85,7 @@ def delete_note(note_id: int):
         connection.commit()
     finally:
         connection.close()
+
+
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="dashboard")
