@@ -1,29 +1,65 @@
 # Notes API
 
-A deliberately small FastAPI application — the starting point for a journey from *"it runs on my laptop"* to *"it runs in production."*
+A deliberately small FastAPI application, used as the starting point for a journey from *"it runs on my laptop"* to *"it runs in production."*
 
-It does almost nothing on purpose. No configuration, no containers, no pipeline, no cloud. Those arrive one stage at a time, on their own branches, so that each one shows up **only once the problem it solves is real**.
-
-## The application
+Each stage of that journey lives on its own branch, and the **git history is the course** — every commit is one deliberate step.
 
 ```mermaid
 flowchart LR
-    B["Browser<br/><i>dashboard + API</i>"] -->|HTTP| A
-    A["FastAPI<br/><i>app/main.py</i>"] --> D["sqlite3<br/><i>app/database.py</i>"]
-    D --> F[("notes.db<br/>a file on disk")]
+    M["main<br/><i>the application</i>"] --> S1["<b>Stage 1</b><br/>portable app"]
+    S1 --> S2["Stage 2<br/>containers"]
+    S2 --> S3["Stage 3<br/>CI/CD"]
+    S3 --> S4["Stage 4<br/>AWS + EKS"]
+    S4 --> S5["Stage 5<br/>SRE"]
+    style S1 stroke:#2f81f7,stroke-width:4px
 ```
 
-That is the whole system: one process, one file. Everything else in this repository is about what happens to it next.
+**You are on Stage 1** (`devops/01-pre-containerisation`): you have inherited someone else's application. Before it can be containerised, it has to be understood, cleaned up, and made portable. No `Dockerfile` here — that is the whole point.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    B["Browser<br/>dashboard + API"] -->|HTTP| A
+
+    subgraph proc["one Python process"]
+        A["FastAPI<br/><i>app/main.py</i>"] --> S["SQLAlchemy Core<br/><i>app/database.py</i>"]
+    end
+
+    S -.->|"DATABASE_URL=sqlite://…"| SQ[("SQLite<br/>a file")]
+    S -.->|"DATABASE_URL=postgresql://…"| PG[("PostgreSQL<br/>a server")]
+```
+
+The application never learns which database it is using. **One environment variable decides** — no code change, no separate build, no `if cloud:` branch anywhere.
 
 ## Run it
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
+cp .env.example .env
 uvicorn app.main:app --reload
 ```
 
-Dashboard at <http://127.0.0.1:8000>, interactive docs at `/docs`, tests with `pytest`.
+Dashboard at <http://127.0.0.1:8000>, docs at `/docs`, tests with `pytest`.
+
+## Choose a database
+
+```bash
+DATABASE_URL=sqlite:///./notes.db                                   # default — no server needed
+DATABASE_URL=postgresql+psycopg://notes:pw@localhost:5432/notes     # a real server
+```
+
+Ask the app which one it actually reached:
+
+```bash
+curl -s localhost:8000/ready
+# {"status":"ready","database":"sqlite"}
+```
+
+SQLite is the default *on purpose* — instant, serverless, and perfect for a fast test loop. PostgreSQL is equally supported for anyone who wants production fidelity locally. Neither is the "real" one.
+
+> Where a password must not sit inside a URL, supply `DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER` plus `DB_PASSWORD_FILE` instead. `DATABASE_URL` always wins; see [`.env.example`](.env.example).
 
 ## API
 
@@ -31,39 +67,24 @@ Dashboard at <http://127.0.0.1:8000>, interactive docs at `/docs`, tests with `p
 |---|---|---|
 | `GET` `POST` | `/notes` | list / create |
 | `GET` `PUT` `DELETE` | `/notes/{id}` | read / update / delete |
+| `GET` | `/health` | liveness — never touches the database |
+| `GET` | `/ready` | readiness — checks the database, reports the backend |
 
-```json
-{ "id": 1, "title": "Groceries", "content": "Milk, eggs", "created_at": "2026-08-25 12:00:00" }
-```
+## What this stage added
 
-## The journey
+| | |
+|---|---|
+| **Configuration** | every setting from the environment (`app/config.py`, `.env.example`) |
+| **Secrets** | refuses to start in production without `APP_SECRET`; passwords readable from a file |
+| **Database portability** | SQLAlchemy Core, `DATABASE_URL`, PostgreSQL driver already installed |
+| **Operability** | split liveness/readiness, structured log level, clear 503 on database failure |
 
-Each stage is a branch. The **git history is the course** — every commit is one deliberate step, meant to be read.
+Earlier commits on this branch deliberately *introduce* realistic problems tagged `TRAINING-ISSUE`; later commits fix them. To do the investigation yourself, check out a commit before **"Fix static analysis findings"**.
 
-```mermaid
-flowchart TD
-    M["<b>main</b><br/>the application"]
-    M --> S1["<b>Stage 1</b> · devops/01-pre-containerisation<br/>inherit it, analyse it, make it portable"]
-    S1 --> S2["<b>Stage 2</b> · devops/02-containerisation-supply-chain<br/>image, scanning, SBOM, supply chain"]
-    S2 --> S3["<b>Stage 3</b> · devops/03-cicd<br/>CI, GHCR, provenance, signing"]
-    S3 --> S4["<b>Stage 4</b> · devops/04-cloud-infrastructure<br/>Terraform, EKS, RDS, real AWS"]
-    S4 --> S5["<i>Stage 5</i> · SRE and observability<br/><i>not in this repository yet</i>"]
-    style M stroke:#2f81f7,stroke-width:4px
-```
+## Next
 
-| Branch | Course | Lessons |
-|---|---|---|
-| `main` | [learning/](learning/) — build this app from an empty folder | 22 |
-| `devops/01-…` | [devops-learning/](devops-learning/) — receive and prepare an inherited app | 15 |
-| `devops/02-…` | [container-learning/](container-learning/) — containers and software supply chain | 27 |
-| `devops/03-…` | [cicd-learning/](cicd-learning/) — CI/CD, registries, signing, provenance | 17 |
-| `devops/04-…` | [cloud-learning/](cloud-learning/) — AWS, Terraform, Kubernetes, EKS | 18 |
+📘 **[devops-learning/](devops-learning/)** — the 15-lesson course for this stage, from "what have I been handed?" to a completed pre-containerisation review.
 
-You don't have to finish one to start the next, but each assumes what the last one built.
+📄 **[README-extended.md](README-extended.md)** — the long version, with full rationale.
 
-```bash
-git switch devops/01-pre-containerisation
-git log --oneline --reverse main..HEAD
-```
-
-📄 More detail: **[README-extended.md](README-extended.md)**.
+▶️ **Stage 2** — `devops/02-containerisation-supply-chain`, where this becomes a hardened, scanned, signed container image.
