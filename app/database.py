@@ -12,8 +12,19 @@ CREATE TABLE IF NOT EXISTS notes (
 """
 
 
+class DatabaseUnavailableError(RuntimeError):
+    """Raised when the configured database cannot be opened.
+
+    Translating the low-level sqlite3 error here keeps callers (app/main.py)
+    from needing to know anything about sqlite3 specifically.
+    """
+
+
 def get_connection() -> sqlite3.Connection:
-    connection = sqlite3.connect(DB_PATH)
-    connection.row_factory = sqlite3.Row
-    connection.execute(SCHEMA)
+    try:
+        connection = sqlite3.connect(DB_PATH)
+        connection.row_factory = sqlite3.Row
+        connection.execute(SCHEMA)
+    except sqlite3.OperationalError as exc:
+        raise DatabaseUnavailableError(f"Could not open database at {DB_PATH!r}: {exc}") from exc
     return connection

@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
 from app.config import APP_ENV, APP_HOST, APP_PORT, LOG_LEVEL
-from app.database import get_connection
+from app.database import DatabaseUnavailableError, get_connection
 from app.models import Note, NoteCreate, NoteUpdate
 
 logging.basicConfig(level=LOG_LEVEL)
@@ -36,9 +36,16 @@ def get_db():
 
     Centralising connection acquisition/cleanup here means every endpoint
     below just declares a `DbConnection` parameter instead of repeating the
-    same acquire/try/finally-close block five times.
+    same acquire/try/finally-close block five times. It also means a
+    database failure produces one clear, understandable 503 response instead
+    of an unhandled 500 traceback leaking out of whichever endpoint happened
+    to touch the database first.
     """
-    connection = get_connection()
+    try:
+        connection = get_connection()
+    except DatabaseUnavailableError as exc:
+        logger.error("Database unavailable: %s", exc)
+        raise HTTPException(status_code=503, detail="Database unavailable") from exc
     try:
         yield connection
     finally:
