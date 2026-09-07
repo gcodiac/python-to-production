@@ -19,17 +19,17 @@ terraform {
     }
   }
 
-  # Deliberately commented out for the first apply. After the bucket exists,
-  # uncomment and run `terraform init -migrate-state` to move this root's own
-  # state into the bucket it just created.
-  #
-  # backend "s3" {
-  #   bucket       = "notes-app-tfstate-042724764568-eu-west-1"
-  #   key          = "bootstrap/terraform.tfstate"
-  #   region       = "eu-west-1"
-  #   encrypt      = true
-  #   use_lockfile = true
-  # }
+  # Enabled after the first apply created this bucket, then migrated with
+  # `terraform init -migrate-state`. Note the bucket now stores the state that
+  # describes the bucket itself - which is exactly why it is never
+  # force-destroyable and why teardown treats it separately (lesson 17).
+  backend "s3" {
+    bucket       = "notes-app-tfstate-042724764568-eu-west-1"
+    key          = "bootstrap/terraform.tfstate"
+    region       = "eu-west-1"
+    encrypt      = true
+    use_lockfile = true
+  }
 }
 
 provider "aws" {
