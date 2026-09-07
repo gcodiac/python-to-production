@@ -6,24 +6,9 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 
+from app.config import APP_ENV, APP_HOST, APP_PORT, LOG_LEVEL
 from app.database import get_connection
 from app.models import Note, NoteCreate, NoteUpdate
-
-# --- Application configuration -------------------------------------------
-#
-# TRAINING-ISSUE: These values are hard-coded directly in source instead of
-# being read from environment variables. That means the *only* way to run
-# this app differently in development, test, staging, or production is to
-# edit this file and ship a new copy of the code for each environment.
-APP_ENV = "development"
-APP_HOST = "0.0.0.0"
-APP_PORT = 8000
-LOG_LEVEL = "INFO"
-
-# TRAINING-ISSUE: Fake hard-coded secret included intentionally for
-# security-scanning training. Never commit real secrets like this to source
-# control - this one is a training placeholder only.
-APP_SECRET = "training-only-do-not-use-in-production-12345"
 
 logging.basicConfig(level=LOG_LEVEL)
 logger = logging.getLogger(__name__)
