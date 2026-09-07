@@ -254,6 +254,12 @@ resource "aws_eks_access_entry" "github_deploy" {
   cluster_name  = aws_eks_cluster.this.name
   principal_arn = var.github_deploy_role_arn
   type          = "STANDARD"
+
+  # Also place this principal in a Kubernetes group, so extra RBAC can be
+  # bound to it. AmazonEKSEditPolicy (below) covers built-in resources but
+  # knows nothing about CRDs such as SecretProviderClass - the platform layer
+  # binds a small Role to this group to cover exactly that gap.
+  kubernetes_groups = [var.github_deploy_kubernetes_group]
 }
 
 resource "aws_eks_access_policy_association" "github_deploy" {
