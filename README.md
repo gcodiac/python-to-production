@@ -1,105 +1,69 @@
-# Minimal Notes API (FastAPI)
+# Notes API
 
-A deliberately small Python web application designed to serve as a starting point for learning how applications evolve from local development to production.
+A deliberately small FastAPI application — the starting point for a journey from *"it runs on my laptop"* to *"it runs in production."*
 
-The application is intentionally kept minimal. It contains only the core application functionality needed to run and test locally, without introducing production infrastructure, deployment automation, cloud configuration, containerization, observability, or other platform concerns.
+It does almost nothing on purpose. No configuration, no containers, no pipeline, no cloud. Those arrive one stage at a time, on their own branches, so that each one shows up **only once the problem it solves is real**.
 
-The goal is to provide a simple application that can be forked and progressively improved while learning topics such as Platform Engineering, DevOps, Infrastructure as Code, cloud infrastructure, security, monitoring, observability, and SRE.
+## The application
 
-## Learn how this was built
+```mermaid
+flowchart LR
+    B["Browser<br/><i>dashboard + API</i>"] -->|HTTP| A
+    A["FastAPI<br/><i>app/main.py</i>"] --> D["sqlite3<br/><i>app/database.py</i>"]
+    D --> F[("notes.db<br/>a file on disk")]
+```
 
-New to Python or FastAPI? Follow the step-by-step [learning/](learning/) course — 22 lessons from absolute basics to a finished, tested app.
+That is the whole system: one process, one file. Everything else in this repository is about what happens to it next.
 
-## Why is it so minimal?
-
-Most example applications already include many production-oriented decisions before explaining why they are needed. This project takes the opposite approach: start with a small application that works locally, then introduce production requirements only when the problems they solve become relevant.
-
-The application therefore deliberately begins without:
-
-* environment-based configuration
-* containerization
-* production databases
-* deployment pipelines
-* cloud infrastructure
-* secret management
-* production logging
-* monitoring and observability
-* infrastructure-specific configuration
-
-These are not missing features. They are intentionally left for the learning journey that begins after forking this repository.
-
-## What this application contains
-
-* a small FastAPI application (`app/main.py`)
-* a simple Notes API (create, read, update, delete)
-* a glassmorphic dashboard UI (`app/static/`) served at `/`, built with plain HTML/CSS/JS against the API — no frontend framework or build step
-* SQLite for local persistence (`app/database.py`)
-* basic automated tests (`tests/test_notes.py`)
-* Python project configuration (`pyproject.toml`)
-
-## Running locally
+## Run it
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-
 uvicorn app.main:app --reload
 ```
 
-The dashboard is now available at `http://127.0.0.1:8000`. Interactive API docs are available at `http://127.0.0.1:8000/docs`.
-
-## Running the tests
-
-```bash
-pytest
-```
+Dashboard at <http://127.0.0.1:8000>, interactive docs at `/docs`, tests with `pytest`.
 
 ## API
 
-| Method | Path          | Description        |
-|--------|---------------|---------------------|
-| GET    | `/notes`      | List all notes      |
-| POST   | `/notes`      | Create a note        |
-| GET    | `/notes/{id}` | Get a single note    |
-| PUT    | `/notes/{id}` | Update a note         |
-| DELETE | `/notes/{id}` | Delete a note         |
-
-A note has the shape:
+| Method | Path | |
+|---|---|---|
+| `GET` `POST` | `/notes` | list / create |
+| `GET` `PUT` `DELETE` | `/notes/{id}` | read / update / delete |
 
 ```json
-{
-  "id": 1,
-  "title": "Groceries",
-  "content": "Milk, eggs",
-  "created_at": "2026-08-25 12:00:00"
-}
+{ "id": 1, "title": "Groceries", "content": "Milk, eggs", "created_at": "2026-08-25 12:00:00" }
 ```
 
-## Intended use
+## The journey
 
-This repository acts as a reusable starting application. A learner can fork it and take the application through a complete journey from:
+Each stage is a branch. The **git history is the course** — every commit is one deliberate step, meant to be read.
 
-```text
-Local application
-        ↓
-Application configuration
-        ↓
-Containerization
-        ↓
-CI/CD
-        ↓
-Infrastructure as Code
-        ↓
-Cloud infrastructure
-        ↓
-Production databases
-        ↓
-Networking and security
-        ↓
-Monitoring and observability
-        ↓
-Reliability and production operations
+```mermaid
+flowchart TD
+    M["<b>main</b><br/>the application"]
+    M --> S1["<b>Stage 1</b> · devops/01-pre-containerisation<br/>inherit it, analyse it, make it portable"]
+    S1 --> S2["<b>Stage 2</b> · devops/02-containerisation-supply-chain<br/>image, scanning, SBOM, supply chain"]
+    S2 --> S3["<b>Stage 3</b> · devops/03-cicd<br/>CI, GHCR, provenance, signing"]
+    S3 --> S4["<b>Stage 4</b> · devops/04-cloud-infrastructure<br/>Terraform, EKS, RDS, real AWS"]
+    S4 --> S5["<i>Stage 5</i> · SRE and observability<br/><i>not in this repository yet</i>"]
+    style M stroke:#2f81f7,stroke-width:4px
 ```
 
-The application should remain simple enough that the focus stays on understanding the engineering required around the application rather than on application business logic.
+| Branch | Course | Lessons |
+|---|---|---|
+| `main` | [learning/](learning/) — build this app from an empty folder | 22 |
+| `devops/01-…` | [devops-learning/](devops-learning/) — receive and prepare an inherited app | 15 |
+| `devops/02-…` | [container-learning/](container-learning/) — containers and software supply chain | 27 |
+| `devops/03-…` | [cicd-learning/](cicd-learning/) — CI/CD, registries, signing, provenance | 17 |
+| `devops/04-…` | [cloud-learning/](cloud-learning/) — AWS, Terraform, Kubernetes, EKS | 18 |
+
+You don't have to finish one to start the next, but each assumes what the last one built.
+
+```bash
+git switch devops/01-pre-containerisation
+git log --oneline --reverse main..HEAD
+```
+
+📄 More detail: **[README-extended.md](README-extended.md)**.
