@@ -4,6 +4,14 @@ Stage 3 ended with a **trusted container artefact**: built once, scanned, SBOM'd
 
 This track gives it somewhere to run — real AWS infrastructure, defined as code, with the application deployed onto Amazon EKS and backed by a managed PostgreSQL database.
 
+One thing to notice early, because it is the point of how this course is sequenced: **this stage changes no application code at all.**
+
+```bash
+git diff --stat devops/03-cicd..devops/04-cloud-infrastructure -- ../app/ ../tests/ ../pyproject.toml
+```
+
+That prints nothing. The application has supported PostgreSQL since Stage 1, developers have been running it on PostgreSQL locally since Stage 2, and CI has verified both backends on every change since Stage 3. So RDS is not a migration here — it is a different hostname and a password delivered as a file. Every problem you hit in this track will be a networking, IAM, or secrets problem, which is exactly what you want when you are learning networking, IAM, and secrets.
+
 ```text
 trusted artefact
        ↓
