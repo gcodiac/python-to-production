@@ -33,10 +33,38 @@ SRE / Production Operations                    (a later stage, not yet in this r
 ```
 
 * **[learning/](learning/) — Application Development / FastAPI.** New to Python or FastAPI? This 22-lesson course builds this exact Notes API from an empty folder, from absolute basics through a finished, tested app with a working dashboard.
-* **[devops-learning/](devops-learning/) — DevOps / Platform Engineering.** Already have this app (or one like it)? This 14-lesson course puts you in the position of a platform/DevOps engineer *receiving* an already-built application from a development team, and walks you through understanding, analysing, and preparing it for containerisation — investigation, static and security analysis, and environment-based configuration, all *before* a single `Dockerfile` gets written. Lives on the `devops/01-pre-containerisation` branch (and, from that branch onward).
-* **[container-learning/](container-learning/) — Container Engineering & Software Supply Chain.** Takes the clean, remediated application from Track 2 and turns it into a real, inspected, tested, scanned, hardened container artefact: a production-quality multi-stage `Dockerfile`, locked dependencies, non-root runtime, persistent storage, a `compose.yaml`, dependency/image/secret scanning (`SECURITY.md`), an SBOM, and a manual release quality gate — deliberately stopping short of CI/CD. Lives on the `devops/02-containerisation-supply-chain` branch.
-* **[cicd-learning/](cicd-learning/) — CI/CD, Registry, Signing & Provenance.** Automates Track 3's manual release gate with real GitHub Actions against this repository's actual GitHub remote: pull-request quality/security gates, a build-once/scan/publish-to-GHCR/SBOM/provenance/cosign-signing release workflow, and Dependabot — verified with real, observed Actions runs (including a genuine failure that was found and fixed), not just written YAML. Lives on the `devops/03-cicd` branch, with an open, unmerged Pull Request (#1) against `devops/02-containerisation-supply-chain`.
-* **[cloud-learning/](cloud-learning/) — AWS, Terraform, Kubernetes & EKS.** Takes the trusted artefact from Track 4 and actually runs it: a real VPC, EKS cluster, managed node group, private ECR, and RDS PostgreSQL, all defined in Terraform, with the application deployed by Helm from GitHub Actions using OIDC (no stored AWS keys) and reading its database password from Secrets Manager via EKS Pod Identity. Includes an honest lesson on why ECS Fargate would arguably be the better engineering choice for an app this small, and why the course chooses EKS anyway. Lives on the `devops/04-cloud-infrastructure` branch.
+* **[devops-learning/](devops-learning/) — DevOps / Platform Engineering.** Already have this app (or one like it)? This 15-lesson course puts you in the position of a platform/DevOps engineer *receiving* an already-built application from a development team, and walks you through understanding, analysing, and preparing it for containerisation — investigation, static and security analysis, environment-based configuration, and making the application database-agnostic so it runs on SQLite *or* PostgreSQL by configuration alone, all *before* a single `Dockerfile` gets written. Lives on the `devops/01-pre-containerisation` branch (and, from that branch onward).
+* **[container-learning/](container-learning/) — Container Engineering & Software Supply Chain.** Takes the clean, remediated application from Track 2 and turns it into a real, inspected, tested, scanned, hardened container artefact: a production-quality multi-stage `Dockerfile`, locked dependencies, non-root runtime, persistent storage, and *two* local Compose topologies for the same image (SQLite or a real PostgreSQL server), plus dependency/image/secret scanning (`SECURITY.md`), an SBOM, and a manual release quality gate that checks both database modes — deliberately stopping short of CI/CD. Lives on the `devops/02-containerisation-supply-chain` branch.
+* **[cicd-learning/](cicd-learning/) — CI/CD, Registry, Signing & Provenance.** Automates Track 3's manual release gate with real GitHub Actions against this repository's actual GitHub remote: pull-request quality/security gates, fast SQLite tests plus a real PostgreSQL service-container integration test, a build-once/scan/publish-to-GHCR/SBOM/provenance/cosign-signing release workflow that verifies the built image against both databases, and Dependabot — verified with real, observed Actions runs (including a genuine failure that was found and fixed), not just written YAML. Lives on the `devops/03-cicd` branch, with an open, unmerged Pull Request (#1) against `devops/02-containerisation-supply-chain`.
+* **[cloud-learning/](cloud-learning/) — AWS, Terraform, Kubernetes & EKS.** Takes the trusted artefact from Track 4 and actually runs it: a real VPC, EKS cluster, managed node group, private ECR, and RDS PostgreSQL, all defined in Terraform, with the application deployed by Helm from GitHub Actions using OIDC (no stored AWS keys) and reading its database password from Secrets Manager via EKS Pod Identity. Because the application has been database-agnostic since Track 2, moving to a managed database costs **zero** application code changes — this stage contains none. Includes an honest lesson on why ECS Fargate would arguably be the better engineering choice for an app this small, and why the course chooses EKS anyway. Lives on the `devops/04-cloud-infrastructure` branch.
+
+### Where the database fits
+
+One thread runs through every track, and it is deliberately front-loaded:
+
+```text
+APPLICATION DEVELOPMENT
+        ↓
+STAGE 1  Database-agnostic application
+         ├── SQLite supported
+         └── PostgreSQL supported          (configuration only, no Docker needed)
+        ↓
+STAGE 2  Local container runtime choices
+         ├── Option A: Docker → FastAPI → SQLite → notes-data volume
+         └── Option B: Compose → FastAPI + PostgreSQL → postgres-data volume
+        ↓
+STAGE 3  CI
+         ├── SQLite fast tests
+         └── PostgreSQL integration tests   (service container + the built image)
+        ↓
+STAGE 4  AWS
+         ├── EKS
+         └── RDS PostgreSQL                 (no application change at all)
+        ↓
+STAGE 5  SRE
+```
+
+The application is made portable *before* it is containerised, so PostgreSQL is never introduced under deployment pressure. SQLite is not a stepping stone that gets discarded — it stays a first-class local option all the way through, because fast feedback on a laptop and production fidelity in CI are different jobs.
 
 You don't have to complete one track to start the next, but each assumes familiarity with what the previous one built. Tracks 2, 3, 4 and 5 live on their own branches specifically so their git history can teach the *process* of hardening an application/image/pipeline one deliberate step at a time - see each track's README for how to read that history.
 
