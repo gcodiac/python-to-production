@@ -91,7 +91,7 @@ jobs:
           ignore-unfixed: true
           exit-code: "1"
 
-      - name: Smoke test the exact image about to be published
+      - name: Smoke test the exact image about to be published (SQLite)
         run: |
           docker run -d --name release-smoke -p 8000:8000 \
             -e APP_ENV=development \
@@ -104,6 +104,19 @@ jobs:
           docker inspect --format='{{.State.Health.Status}}' release-smoke | grep -q healthy
           curl -sf http://127.0.0.1:8000/health
           docker rm -f release-smoke
+
+      # The same image, against a real PostgreSQL server, before anything is
+      # published. A release artefact that has only ever been run on SQLite
+      # is not a release artefact for an environment that runs PostgreSQL.
+      #
+      # Note what does NOT happen here: a rebuild. The image tested below is
+      # byte-for-byte the image that gets pushed in the next step - that is
+      # the whole point of build-once - see
+      # cicd-learning/07-build-once-promote-many.md.
+      - name: Smoke test the exact image about to be published (PostgreSQL)
+        env:
+          NOTES_APP_IMAGE: ${{ env.IMAGE_NAME }}:sha-${{ steps.vars.outputs.short_sha }}
+        run: ./scripts/postgres-smoke-test.sh
 
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -181,5 +194,6 @@ jobs:
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Image: \`${{ env.IMAGE_NAME }}:sha-${{ steps.vars.outputs.short_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- Digest: \`${{ steps.publish.outputs.digest }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Databases verified: SQLite and PostgreSQL (same image, no rebuild)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Signed and verified: yes (cosign keyless/OIDC)" >> "$GITHUB_STEP_SUMMARY"
           echo "- Provenance attestation: published" >> "$GITHUB_STEP_SUMMARY"
