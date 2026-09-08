@@ -37,3 +37,21 @@ htmlcov/
 # Generated scan/SBOM output (pip-audit, Trivy, Syft, Grype) - reproducible
 # from the commands in SECURITY.md and container-learning/, not committed.
 /reports/
+
+# Terraform - state is sensitive and machine-specific, never commit it.
+# .terraform.lock.hcl IS committed (pinned provider hashes) - see infra/README.md.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+.terraformrc
+terraform.rc
+
+# Kubernetes / Helm
+kubeconfig
+kubeconfig-*
+.rendered/

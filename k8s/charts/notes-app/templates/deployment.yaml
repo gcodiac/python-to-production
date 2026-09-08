@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "notes-app.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "notes-app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: {{ .Values.strategy.type }}
+    {{- if eq .Values.strategy.type "RollingUpdate" }}
+    rollingUpdate:
+      # maxUnavailable 0 + maxSurge 1: the new Pod must become Ready before
+      # the old one is removed, so a single-replica deployment still rolls
+      # without dropping traffic.
+      maxUnavailable: {{ .Values.strategy.maxUnavailable }}
+      maxSurge: {{ .Values.strategy.maxSurge }}
+    {{- end }}
+  selector:
+    matchLabels:
+      {{- include "notes-app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "notes-app.selectorLabels" . | nindent 8 }}
+      annotations:
+        # Roll the Pods when non-secret configuration changes, which a
+        # ConfigMap update alone would not do.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: notes-app
+          # Always a digest - see the notes-app.image helper, which refuses
+          # to render at all if only a tag is supplied.
+          image: {{ include "notes-app.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "notes-app.fullname" . }}-config
+          env:
+            # APP_SECRET is required whenever APP_ENV=production. Staging uses
+            # the application's non-production path, so nothing secret is set
+            # here - and nothing secret is ever put in a ConfigMap or values file.
+            - name: APP_ENV
+              value: {{ .Values.config.APP_ENV | quote }}
+          # Liveness deliberately hits /health, which never touches the
+          # database: a database blip must not trigger Pod restarts.
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          # Readiness hits /ready, which DOES check the database, so a Pod
+          # that cannot reach RDS is pulled from the ALB without restarting.
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          # requests = what the scheduler reserves; limits = the hard ceiling.
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            # The database password, mounted read-only from Secrets Manager.
+            - name: db-secret
+              mountPath: {{ .Values.secrets.mountPath }}
+              readOnly: true
+            # readOnlyRootFilesystem is true, so anything the process needs to
+            # write requires an explicit writable volume. /tmp is emptyDir:
+            # ephemeral, per-Pod scratch space that disappears with the Pod.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: db-secret
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ include "notes-app.fullname" . }}-db
+        - name: tmp
+          emptyDir: {}

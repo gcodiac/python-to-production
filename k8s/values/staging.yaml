@@ -1,0 +1,43 @@
+# Staging environment values.
+#
+# Everything here is non-secret and safe to commit. The database password is
+# absent by design - it reaches the Pod only through the Secrets Store CSI
+# mount described in the chart's secretproviderclass.yaml.
+#
+# image.repository / image.digest and the discovered DB/secret values are
+# supplied by the deploy workflow at release time, so this file never pins a
+# stale image or duplicates Terraform outputs.
+
+replicaCount: 1
+
+config:
+  APP_ENV: staging
+  LOG_LEVEL: INFO
+  APP_HOST: "0.0.0.0"
+  APP_PORT: "8000"
+  DB_PORT: "5432"
+  DB_NAME: notes
+  DB_SSLMODE: require
+
+resources:
+  requests:
+    # Measured against the running application rather than guessed: the
+    # FastAPI process idles well under 100Mi with a handful of connections.
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
+    alb.ingress.kubernetes.io/success-codes: "200"
+    # No HTTPS listener: this sandbox has no domain and no ACM certificate.
+    # Production would terminate TLS here - see cloud-learning/13.

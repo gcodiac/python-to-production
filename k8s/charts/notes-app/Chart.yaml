@@ -1,0 +1,10 @@
+apiVersion: v2
+name: notes-app
+description: The Notes API - FastAPI on EKS, backed by RDS PostgreSQL.
+type: application
+
+# Chart version tracks the packaging; appVersion is informational only.
+# The authoritative deployment identity is the image DIGEST in values.yaml,
+# never a tag - see cloud-learning/12-packaging-the-application-with-helm.md.
+version: 0.1.0
+appVersion: "0.1.0"
