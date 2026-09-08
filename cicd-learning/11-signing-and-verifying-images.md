@@ -1,4 +1,4 @@
-# Lesson 10 — Signing and Verifying Images
+# Lesson 11 — Signing and Verifying Images
 
 **What you'll learn:** keyless image signing with cosign and GitHub's OIDC identity, verified twice - once inside the workflow, once independently, from outside GitHub Actions entirely.
 
@@ -56,7 +56,7 @@ cosign verify \
   ghcr.io/gcodiac/python-to-production@sha256:e36d156c9c6ecae7c9ed64e041a2ad46e1e3be5da65c720e316b5dbdc41e29b4
 ```
 
-This is not a hypothetical - running this exact command (as this lesson's author did) against this project's real published image succeeds, and prints two verified claims: a `slsa.dev/provenance/v1` entry (Lesson 09's attestation) and a `sigstore.dev/cosign/sign/v1` entry (this signature) - both bound to the same docker manifest digest.
+This is not a hypothetical - running this exact command (as this lesson's author did) against this project's real published image succeeds, and prints two verified claims: a `slsa.dev/provenance/v1` entry (Lesson 10's attestation) and a `sigstore.dev/cosign/sign/v1` entry (this signature) - both bound to the same docker manifest digest.
 
 ## Questions for the learner
 

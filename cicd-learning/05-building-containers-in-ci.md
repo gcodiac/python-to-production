@@ -1,4 +1,4 @@
-# Lesson 04 — Building Containers in CI
+# Lesson 05 — Building Containers in CI
 
 **What you'll learn:** how `docker/build-push-action` and `docker/setup-buildx-action` build this project's real image on a GitHub-hosted runner - and confirmation that it actually worked.
 
@@ -14,7 +14,7 @@ Stage 2 was built and verified in an environment with no Docker daemon at all - 
 
 * **Buildx** — Docker's modern builder frontend (BuildKit), needed for advanced features like the registry-backed cache this project uses. `docker/setup-buildx-action` prepares it on the runner.
 * **`docker/build-push-action`** — the standard, well-maintained action wrapping `docker buildx build`, supporting build args, caching, and (later, in `release.yml`) pushing.
-- **`load: true`, `push: false`** — this project's PR job builds the image and loads it into the runner's local Docker daemon (so it can be scanned and smoke-tested) without ever pushing it anywhere. See Lesson 07.
+- **`load: true`, `push: false`** — this project's PR job builds the image and loads it into the runner's local Docker daemon (so it can be scanned and smoke-tested) without ever pushing it anywhere. See Lesson 08.
 
 ## Investigation steps
 

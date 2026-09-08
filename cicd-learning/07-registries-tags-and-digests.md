@@ -1,4 +1,4 @@
-# Lesson 06 — Registries, Tags, and Digests
+# Lesson 07 — Registries, Tags, and Digests
 
 **What you'll learn:** the difference between a tag and a digest, using this project's real, published GHCR image as the example - not a hypothetical one.
 
@@ -50,7 +50,7 @@ grep -A8 "name: Publish to GHCR" .github/workflows/release.yml
 
 ## Practical exercise
 
-Using the real digest from Step 1, write out (don't execute - see Lesson 14 for real verification commands) what a `docker pull` by digest, rather than by tag, would look like:
+Using the real digest from Step 1, write out (don't execute - see Lesson 15 for real verification commands) what a `docker pull` by digest, rather than by tag, would look like:
 
 ```text
 docker pull ghcr.io/gcodiac/python-to-production@sha256:e36d156c9c6ecae7c9ed64e041a2ad46e1e3be5da65c720e316b5dbdc41e29b4

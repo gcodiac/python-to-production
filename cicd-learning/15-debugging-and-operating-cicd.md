@@ -1,4 +1,4 @@
-# Lesson 14 — Debugging and Operating CI/CD
+# Lesson 15 — Debugging and Operating CI/CD
 
 **What you'll learn:** the real `gh run`-based debugging loop this project already used once (Lesson 02), generalised - plus this project's recommended, not-yet-applied branch protection settings.
 

@@ -14,7 +14,7 @@ on:
 
 # Least privilege: this workflow only ever reads the repository. It never
 # publishes anything, so it never needs packages/id-token/attestations
-# permissions - see cicd-learning/11-cicd-secrets-permissions-and-oidc.md.
+# permissions - see cicd-learning/12-cicd-secrets-permissions-and-oidc.md.
 permissions:
   contents: read
 
@@ -48,7 +48,7 @@ jobs:
       # The fast tier: the whole suite against SQLite, with no service
       # container to start and nothing to wait for. This is what should run
       # on every push, and it is why SQLite stays supported - see
-      # cicd-learning/16-verifying-database-portability-in-ci.md.
+      # cicd-learning/04-verifying-database-portability-in-ci.md.
       - name: pytest (SQLite)
         run: pytest
 
@@ -91,7 +91,7 @@ jobs:
           # deliberately NOT a GitHub Secret: making it one would imply it
           # protects something, and would teach the habit of storing
           # non-secrets in the secret store - see
-          # cicd-learning/11-cicd-secrets-permissions-and-oidc.md.
+          # cicd-learning/12-cicd-secrets-permissions-and-oidc.md.
           POSTGRES_PASSWORD: ephemeral-ci-database-not-a-secret
         ports:
           - 5432:5432
@@ -147,7 +147,7 @@ jobs:
       # Built locally on the runner and loaded into its Docker daemon -
       # never pushed anywhere. A PR is untrusted input; it only ever
       # proves the image builds and passes checks, it never publishes -
-      # see cicd-learning/07-build-once-promote-many.md.
+      # see cicd-learning/08-build-once-promote-many.md.
       - name: Build image (not published)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -161,7 +161,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       # Report-vs-block policy, chosen deliberately - see
-      # cicd-learning/05-container-scanning-in-ci.md: block fixable
+      # cicd-learning/06-container-scanning-in-ci.md: block fixable
       # HIGH/CRITICAL findings, don't fail the PR over unfixed-upstream or
       # lower-severity findings.
       - name: Trivy image scan

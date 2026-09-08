@@ -1,4 +1,4 @@
-# Lesson 08 — SBOMs and Release Artifacts
+# Lesson 09 — SBOMs and Release Artifacts
 
 **What you'll learn:** how `anchore/sbom-action` generates a real SBOM for this project's actual published image, and where to find it.
 
@@ -20,7 +20,7 @@ Stage 2 could only generate an SBOM from the *source tree* (`syft dir:.`) - ther
 grep -A6 "Generate SBOM for the published image" .github/workflows/release.yml
 ```
 
-Notice it targets `${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}` - the digest, not a tag (Lesson 06).
+Notice it targets `${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}` - the digest, not a tag (Lesson 07).
 
 ### 2. Confirm it ran for real
 
@@ -37,7 +37,7 @@ cat /tmp/notes-app-sbom/sbom.cdx.json | python3 -m json.tool | head -30
 
 ## Questions for the learner
 
-1. Compare this SBOM's component list (from the real, built image) against Stage 2's source-tree-only SBOM (`container-learning/17-generating-an-sbom.md`). What categories of components would you now expect to see here that weren't in Stage 2's version? (Hint: OS packages - see container-learning's own honesty note about this exact gap.)
+1. Compare this SBOM's component list (from the real, built image) against Stage 2's source-tree-only SBOM (`container-learning/18-generating-an-sbom.md`). What categories of components would you now expect to see here that weren't in Stage 2's version? (Hint: OS packages - see container-learning's own honesty note about this exact gap.)
 2. Why is this SBOM uploaded as a GitHub Actions artifact (`actions/upload-artifact`) with a 30-day retention, rather than committed to the git repository the way `SECURITY.md` is?
 3. Revisit the "critical vulnerability discovered tomorrow" question from Stage 2. Now that a real SBOM exists for a real published digest, what would answering that question actually look like in practice - what would you search, and for what?
 
