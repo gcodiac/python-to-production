@@ -3,8 +3,13 @@ import tempfile
 
 # Point the application at a throwaway SQLite file *before* importing it, so
 # the test run never touches a developer's real notes.db.
+#
+# setdefault, not assignment: if DATABASE_URL is already set, whoever set it
+# wins. That is how CI runs this exact suite a second time against a real
+# PostgreSQL server without maintaining a separate copy of these tests - see
+# cicd-learning/16-verifying-database-portability-in-ci.md.
 _TEST_DB_DIR = tempfile.mkdtemp(prefix="notes-tests-")
-os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB_DIR}/notes.db"
+os.environ.setdefault("DATABASE_URL", f"sqlite:///{_TEST_DB_DIR}/notes.db")
 
 import pytest
 from fastapi.testclient import TestClient

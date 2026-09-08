@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-IMAGE="notes-app:local"
+IMAGE="${NOTES_APP_IMAGE:-notes-app:local}"
 CONTAINER="notes-app-smoke-test"
 PORT="18000"
 VOLUME="notes-app-smoke-test-data"
