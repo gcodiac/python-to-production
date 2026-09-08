@@ -1,65 +1,106 @@
 # Lesson 10 — RDS PostgreSQL and Persistent Data
 
-**What you'll learn:** why the cloud environment swaps SQLite for PostgreSQL, how the same codebase supports both, and how the credential never touches Terraform state.
+**What you'll learn:** why the cloud environment needs a managed database, how much of the application had to change to get one (spoiler: nothing), and how the credential never touches Terraform state.
 
 ## Goal
 
-Explain the two-backend design in `app/database.py` and the RDS settings chosen for a cost-controlled sandbox.
+Be able to state exactly which configuration values differ between local PostgreSQL and RDS, and to justify the RDS settings chosen for a cost-controlled sandbox.
 
 ## Why not SQLite in the cloud?
 
-SQLite is a file. In Kubernetes, a Pod's filesystem is ephemeral — delete the Pod and the file goes with it. Stage 2 solved this locally with a Docker volume, but that only works because the container always lands on the same machine. In a cluster, a Pod can be rescheduled to a different node entirely.
+SQLite is a file. In Kubernetes, a Pod's filesystem is ephemeral — delete the Pod and the file goes with it. Stage 2 solved this locally with a Docker volume, but that only works because the container always lands on the same machine. In a cluster, a Pod can be rescheduled to a different node entirely, and more than one replica may run at once — which a single-writer file database cannot serve.
 
 ```text
 Pod       = replaceable
 RDS       = persistent state
 ```
 
-## One codebase, two backends
+This is not a claim that SQLite is bad. It is a claim about *this* runtime: replicas, rescheduling, and shared state are the requirements, and a file on a Pod's disk does not meet them.
 
-Local development keeps SQLite. Cloud staging uses PostgreSQL. **Nothing about the image changes** — only configuration:
+## The interesting part: nothing in the application changed
+
+This is the lesson's real content, and it is deliberately anticlimactic.
+
+```bash
+git diff --stat devops/03-cicd..devops/04-cloud-infrastructure -- ../app/ ../tests/ ../pyproject.toml ../requirements.txt
+```
+
+That command prints nothing. **The entire cloud stage contains zero changes to application code, tests, or dependencies.**
+
+That is the payoff for work done three stages ago. The application became database-agnostic in Stage 1, developers have been running it on PostgreSQL locally since Stage 2, and CI has been proving both backends work since Stage 3. By the time RDS appears, PostgreSQL is not a new capability — it is a backend this application has been exercising continuously. RDS is a *different address*, not a different application.
+
+Compare the two ways this migration could have gone:
 
 ```text
-LOCAL                              CLOUD
-DATABASE_URL=sqlite:///./notes.db  DB_HOST=...rds.amazonaws.com
-                                   DB_PORT=5432
-                                   DB_NAME=notes
-                                   DB_USER=notes_admin
-                                   DB_PASSWORD_FILE=/mnt/secrets/db_password
+THE COMMON WAY                          THIS COURSE
+cloud deadline arrives                  Stage 1: app made portable
+      ↓                                        ↓
+add PostgreSQL driver                   Stage 2: developers run both locally
+      ↓                                        ↓
+rewrite the data layer                  Stage 3: CI verifies both
+      ↓                                        ↓
+debug it against a database             Stage 4: point at RDS
+you cannot see, inside a VPC                   ↓
+you just built, with secrets            done
+you just configured
 ```
+
+When something *does* go wrong in this stage, it is therefore a networking, IAM, or secrets problem — never an "does our code even work on PostgreSQL" problem. That is worth a great deal at three in the morning.
+
+## Local PostgreSQL → RDS: what actually differs
+
+The application reads its database configuration exactly the same way in all three environments:
+
+```text
+LOCAL SQLITE                LOCAL POSTGRESQL              AWS STAGING
+DATABASE_URL=               DATABASE_URL=                 DB_HOST=...rds.amazonaws.com
+  sqlite:///./notes.db        postgresql+psycopg://       DB_PORT=5432
+                              notes:...@postgres:5432/    DB_NAME=notes
+                              notes                       DB_USER=notes_admin
+                                                          DB_PASSWORD_FILE=
+                                                            /mnt/secrets/db_password
+```
+
+| | Local PostgreSQL (Compose) | AWS staging (RDS) |
+|---|---|---|
+| Database engine | PostgreSQL 17.6 | PostgreSQL 17.11 |
+| Application code | same | same |
+| Container image | same | same |
+| Python driver | psycopg 3 | psycopg 3 |
+| SQLAlchemy engine/config | same | same |
+| Schema creation | `metadata.create_all()` | `metadata.create_all()` |
+| DB host | `postgres` (Compose DNS) | RDS endpoint (Route 53 private DNS) |
+| DB port | 5432 | 5432 |
+| Database name | `notes` | `notes` |
+| Credentials from | `.env` / Compose defaults | Secrets Manager, via a mounted file |
+| Password reaches app as | environment variable | file at `DB_PASSWORD_FILE` |
+| Persistence | Docker named volume | RDS storage (EBS, snapshotted) |
+| Backups | none (throwaway) | managed, automated |
+| Networking | Compose bridge network | VPC, isolated subnets, security groups |
+| TLS | optional, usually off | `sslmode=require` |
+| Failure of the DB | `docker compose up` again | AWS handles hardware; you handle config |
+
+Read that table column by column. Everything above the "DB host" row is *identical*, and everything below it is infrastructure. That split is the entire point of the design.
 
 ```bash
-grep -A6 "DB_BACKEND" ../app/config.py
+grep -n "DB_" ../k8s/values/staging.yaml
 ```
 
-`DB_BACKEND` is `postgres` whenever `DB_HOST` is set, otherwise `sqlite`. The SQLite path is byte-for-byte what Stages 1-3 shipped.
+Note which values staging sets explicitly: `DB_PORT`, `DB_NAME`, and `DB_SSLMODE: require`. The application defaults `DB_SSLMODE` to unset, because whether the network between app and database is trusted is a property of the environment, not of the code — so staging states it, and Compose does not.
 
-## The adapter, and the one place the backends genuinely differ
+## How the URL gets built without a URL
+
+The application prefers `DATABASE_URL` when it is set. Staging does not set it, and that is deliberate: embedding the password in a URL means whatever assembles that URL must handle the password, which in Kubernetes would mean putting it in a ConfigMap, a Helm value, or an env var.
 
 ```bash
-grep -A20 "_PostgresConnection" ../app/database.py
+grep -A20 "def database_url" ../app/config.py
 ```
 
-The application's SQL is written once, using SQLite's `?` placeholders. A thin adapter translates `?` to psycopg's `%s` and returns dict-like rows, so `dict(row)` behaves identically on both.
-
-Only **insert** needed a real branch, because the backends genuinely differ:
-
-* SQLite: `cursor.lastrowid`
-* PostgreSQL: `INSERT ... RETURNING *`
+Instead, staging supplies the components, and the password arrives separately as a file. SQLAlchemy's `URL.create()` assembles them, escaping each part — so an RDS-generated password containing `@`, `:`, `/` or `#` cannot corrupt the connection details, a real bug class that naive f-string URL building introduces.
 
 ```bash
-grep -A20 "def insert_note" ../app/database.py
+grep -A12 "def read_db_password" ../app/config.py
 ```
-
-That is the honest amount of divergence — not a rewritten data layer.
-
-## Connecting safely
-
-```bash
-grep -A20 "_connect_postgres" ../app/database.py
-```
-
-Note what is *not* there: any string-built connection URL. Credentials are passed as **keyword arguments**, so a password containing `@`, `:`, `/` or `#` needs no escaping and cannot corrupt the connection parameters. This was verified against a real PostgreSQL container using the deliberately hostile password `p@ss:w/rd#123`.
 
 `sslmode=require` encrypts the connection to RDS. That encrypts traffic but does **not** verify the server's certificate chain — production should consider `verify-full` with the RDS CA bundle, which additionally protects against an impersonated endpoint. That is a genuine gap, stated rather than hidden.
 
@@ -76,7 +117,7 @@ grep -A30 'resource "aws_db_instance"' ../infra/modules/database/main.tf
 | Storage | 20 GiB gp3, **encrypted** | small, autoscaling to 50 GiB |
 | `publicly_accessible` | **false** | plus isolated subnets with no internet route |
 | `multi_az` | **false** | Multi-AZ roughly doubles instance cost |
-| Backups | 3 days | short but deliberately non-zero |
+| Backups | 1 day | the maximum AWS Free Tier allows; production would raise this |
 | Performance Insights / Enhanced Monitoring | **off** | both bill extra; Stage 5 uses Prometheus |
 | `deletion_protection` | **false** | so this sandbox can actually be torn down |
 
@@ -113,7 +154,10 @@ Exactly one ingress rule: TCP 5432, from the EKS cluster security group. No `0.0
 1. Why does a Pod being rescheduled to another node break SQLite-on-a-volume but not RDS?
 2. What is the practical difference between `sslmode=require` and `verify-full`?
 3. Name two things `manage_master_user_password = true` prevents that `random_password` does not.
+4. Staging supplies `DB_HOST`/`DB_USER`/`DB_PASSWORD_FILE` rather than a single `DATABASE_URL`. Give the specific security reason, then give one situation where `DATABASE_URL` would be the better choice.
+5. Run the `git diff --stat` command from the top of this lesson. Given that it prints nothing, what work made that possible, and in which stage was it done?
+6. Suppose PostgreSQL support had been added *here*, in Stage 4, instead. Name three distinct causes you would have to rule out for a connection failure that you do not have to rule out now.
 
 ## Recap
 
-The same image runs on SQLite locally and PostgreSQL in the cloud, chosen purely by configuration, with a password that RDS generates straight into Secrets Manager and Terraform never sees. Next: how that password reaches the Pod.
+Moving to a managed database turned out to be an infrastructure change and nothing else: same image, same code, same driver, same SQLAlchemy engine — a different host, and a password delivered as a file instead of an environment variable. RDS generates that password straight into Secrets Manager, so Terraform never sees it. Next: how it reaches the Pod.

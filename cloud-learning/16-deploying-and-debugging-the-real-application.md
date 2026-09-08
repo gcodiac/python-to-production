@@ -40,7 +40,7 @@ curl -s -X POST "http://$HOST/notes" -H 'Content-Type: application/json' \
   -d '{"title":"from the cloud","content":"stored in RDS"}'
 ```
 
-`/ready` returning `{"status":"ready","database":"postgres"}` is the proof that the cloud deployment is genuinely on PostgreSQL rather than silently falling back to SQLite.
+`/ready` returning `{"status":"ready","database":"postgresql"}` is the proof that the cloud deployment is genuinely on PostgreSQL rather than silently falling back to SQLite.
 
 ## Proving persistence: Pods are replaceable, RDS is not
 
