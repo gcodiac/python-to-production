@@ -8,11 +8,13 @@
 # and no code change, works on both backends - which is the claim the whole
 # database-portability design makes, and therefore the claim worth testing.
 #
-# Requires: an image already built as notes-app:local (`make build`).
+# Requires: an image already built as notes-app:local (`make build`), or any
+# image passed via NOTES_APP_IMAGE - which is how CI runs this same script
+# against the image it has just built, without rebuilding anything.
 
 set -euo pipefail
 
-IMAGE="notes-app:local"
+IMAGE="${NOTES_APP_IMAGE:-notes-app:local}"
 APP="notes-app-pg-smoke-app"
 DB="notes-app-pg-smoke-db"
 NETWORK="notes-app-pg-smoke-net"

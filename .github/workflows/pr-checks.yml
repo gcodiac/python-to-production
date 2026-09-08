@@ -1,0 +1,209 @@
+name: PR Checks
+
+# Automates the exact manual quality gate Stage 2 already taught -
+# see cicd-learning/02-pull-request-quality-gates.md and
+# cicd-learning/03-security-and-dependency-gates.md. Nothing here is new
+# logic; it's the same pytest/ruff/bandit/pip-audit commands, just
+# triggered automatically instead of by hand.
+
+on:
+  pull_request:
+    branches:
+      - devops/02-containerisation-supply-chain
+      - main
+
+# Least privilege: this workflow only ever reads the repository. It never
+# publishes anything, so it never needs packages/id-token/attestations
+# permissions - see cicd-learning/12-cicd-secrets-permissions-and-oidc.md.
+permissions:
+  contents: read
+
+# A PR that gets five quick pushes doesn't need four obsolete validation
+# runs still consuming runners - cancel superseded runs for the same PR.
+concurrency:
+  group: pr-checks-${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Cheapest, fastest checks first - fail fast before spending time on a
+  # Docker build. See cicd-learning/01-ci-cd-and-pipeline-triggers.md.
+  quality-and-security:
+    name: Lint, test, and source security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install project (with dev tooling)
+        run: pip install -e ".[dev]" pip-audit
+
+      - name: Ruff (code quality)
+        run: ruff check app/
+
+      # The fast tier: the whole suite against SQLite, with no service
+      # container to start and nothing to wait for. This is what should run
+      # on every push, and it is why SQLite stays supported - see
+      # cicd-learning/04-verifying-database-portability-in-ci.md.
+      - name: pytest (SQLite)
+        run: pytest
+
+      # --severity-level medium: Bandit exits non-zero on ANY finding by
+      # default, including the one low-severity, already-reviewed finding
+      # documented in SECURITY.md (a dev-only placeholder that the code
+      # guarantees is unreachable in production). Blocking on medium+ and
+      # reporting/documenting lower severities is the same policy this
+      # project already applies to Trivy - see
+      # cicd-learning/03-security-and-dependency-gates.md.
+      - name: Bandit (source security patterns)
+        run: bandit -r app/ --severity-level medium
+
+      - name: pip-audit (known-vulnerable dependencies)
+        run: |
+          pip-audit -r requirements.txt
+          pip-audit -r requirements-dev.txt
+
+  # The slower tier: the SAME test suite, against a real PostgreSQL server.
+  # Not a copy of the tests - the identical files, pointed at a different
+  # backend through DATABASE_URL. This is what stops PostgreSQL support from
+  # quietly rotting between cloud deployments.
+  postgres-integration:
+    name: Integration tests (real PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: quality-and-security
+
+    services:
+      postgres:
+        # Pinned, exactly as compose.postgres.yaml pins it. CI testing a
+        # different major version to the one developers run locally would
+        # defeat the purpose of running this at all.
+        image: postgres:17.6-alpine
+        env:
+          POSTGRES_DB: notes_test
+          POSTGRES_USER: notes_test
+          # A disposable value for a database that exists for the length of
+          # this job and is reachable only from this runner. It is
+          # deliberately NOT a GitHub Secret: making it one would imply it
+          # protects something, and would teach the habit of storing
+          # non-secrets in the secret store - see
+          # cicd-learning/12-cicd-secrets-permissions-and-oidc.md.
+          POSTGRES_PASSWORD: ephemeral-ci-database-not-a-secret
+        ports:
+          - 5432:5432
+        # Without this, steps start the moment the container does - which is
+        # several seconds before PostgreSQL accepts connections. GitHub waits
+        # for the health check to pass before running any step.
+        options: >-
+          --health-cmd "pg_isready -U notes_test -d notes_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install project (with dev tooling)
+        run: pip install -e ".[dev]"
+
+      - name: pytest (PostgreSQL)
+        env:
+          DATABASE_URL: postgresql+psycopg://notes_test:ephemeral-ci-database-not-a-secret@127.0.0.1:5432/notes_test
+        run: |
+          pytest
+          echo "The same suite passed on both SQLite and PostgreSQL."
+
+  dockerfile-lint:
+    name: Dockerfile lint (Hadolint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: quality-and-security
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          dockerfile: Dockerfile
+
+  build-and-scan:
+    name: Build image, scan, smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [dockerfile-lint, postgres-integration]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      # Built locally on the runner and loaded into its Docker daemon -
+      # never pushed anywhere. A PR is untrusted input; it only ever
+      # proves the image builds and passes checks, it never publishes -
+      # see cicd-learning/08-build-once-promote-many.md.
+      - name: Build image (not published)
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          push: false
+          load: true
+          tags: notes-app:pr-check
+          build-args: |
+            GIT_REVISION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Report-vs-block policy, chosen deliberately - see
+      # cicd-learning/06-container-scanning-in-ci.md: block fixable
+      # HIGH/CRITICAL findings, don't fail the PR over unfixed-upstream or
+      # lower-severity findings.
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: notes-app:pr-check
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Container smoke test (SQLite)
+        run: |
+          docker run -d --name pr-smoke -p 8000:8000 \
+            -e APP_ENV=development \
+            notes-app:pr-check
+
+          echo "Waiting for the container to report healthy..."
+          for _ in $(seq 1 15); do
+            status="$(docker inspect --format='{{.State.Health.Status}}' pr-smoke 2>/dev/null || echo starting)"
+            [ "$status" = "healthy" ] && break
+            sleep 2
+          done
+          docker inspect --format='{{.State.Health.Status}}' pr-smoke | grep -q healthy
+
+          curl -sf http://127.0.0.1:8000/health
+          NOTE_ID=$(curl -sf -X POST http://127.0.0.1:8000/notes \
+            -H "Content-Type: application/json" \
+            -d '{"title":"ci smoke test","content":"created by pr-checks.yml"}' \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+          curl -sf "http://127.0.0.1:8000/notes/${NOTE_ID}" | grep -q "ci smoke test"
+
+          docker rm -f pr-smoke
+
+      # The strongest check in this workflow: the image that was just built
+      # is run against a real PostgreSQL server, and the row it writes over
+      # HTTP is read back out with psql. Running the Python tests proves the
+      # source is portable; this proves the *artefact* is.
+      #
+      # Deliberately the same script a developer runs locally with
+      # `make postgres-test` - CI automates the existing gate, it does not
+      # invent a second one.
+      - name: Container smoke test (PostgreSQL)
+        env:
+          NOTES_APP_IMAGE: notes-app:pr-check
+        run: ./scripts/postgres-smoke-test.sh
