@@ -1,4 +1,4 @@
-# Lesson 12 — Dependency Update Automation
+# Lesson 13 — Dependency Update Automation
 
 **What you'll learn:** what `.github/dependabot.yml` actually does in this project, and why it proposes rather than merges.
 
@@ -28,8 +28,8 @@ cat .github/dependabot.yml
 
 Three ecosystems, each weekly:
 
-* **`pip`** — this project's own `pyproject.toml`/locked dependencies (Lesson 06 of Stage 2's track).
-* **`github-actions`** — the third-party Actions pinned throughout `pr-checks.yml`/`release.yml` (Lesson 11's supply-chain point, automated: these are dependencies too).
+* **`pip`** — this project's own `pyproject.toml`/locked dependencies (Lesson 07 of Stage 2's track).
+* **`github-actions`** — the third-party Actions pinned throughout `pr-checks.yml`/`release.yml` (Lesson 12's supply-chain point, automated: these are dependencies too).
 * **`docker`** — the base image pinned in the `Dockerfile` (Stage 2's base-image-choice lesson).
 
 ## Investigation steps
@@ -48,7 +48,7 @@ A Dependabot PR targeting, say, a `fastapi` patch bump would trigger `pr-checks.
 
 ## Questions for the learner
 
-1. Why does automatically merging a `github-actions` ecosystem update carry a different risk than automatically merging a `pip` update, given both are "just a dependency bump"? (Reconnect to Lesson 11's action-pinning-as-supply-chain-dependency point.)
+1. Why does automatically merging a `github-actions` ecosystem update carry a different risk than automatically merging a `pip` update, given both are "just a dependency bump"? (Reconnect to Lesson 12's action-pinning-as-supply-chain-dependency point.)
 2. If Dependabot proposed bumping the pinned base image tag in the `Dockerfile` (e.g. `python:3.12.14-slim-bookworm` → a newer patch), would `pr-checks.yml`'s Trivy step have any chance of catching a *regression* introduced by that bump? What would it definitely catch, and what might it miss?
 3. `open-pull-requests-limit: 5` is set for all three ecosystems. What problem does that guard against, specifically?
 

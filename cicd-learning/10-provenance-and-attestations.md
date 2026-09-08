@@ -1,4 +1,4 @@
-# Lesson 09 — Provenance and Attestations
+# Lesson 10 — Provenance and Attestations
 
 **What you'll learn:** what `actions/attest-build-provenance` actually proves, using this project's real, generated attestation.
 
@@ -8,7 +8,7 @@ Understand provenance as a concrete question - "can we prove where this artefact
 
 ## Why this matters in real DevOps/platform work
 
-An SBOM (Lesson 08) tells you *what's inside* an artefact. Provenance tells you something different: *how it came to exist*. Both matter, and neither substitutes for the other.
+An SBOM (Lesson 09) tells you *what's inside* an artefact. Provenance tells you something different: *how it came to exist*. Both matter, and neither substitutes for the other.
 
 ## Concepts
 
@@ -26,7 +26,7 @@ output digest
 provenance
 ```
 
-This project doesn't implement the full SLSA specification (it's a large, formal framework) - the practical target is just: given a published image, can you produce verifiable evidence of the workflow, commit, and builder that produced it? GitHub's `attest-build-provenance` action answers exactly that, using the same OIDC identity mechanism as cosign signing (Lesson 10).
+This project doesn't implement the full SLSA specification (it's a large, formal framework) - the practical target is just: given a published image, can you produce verifiable evidence of the workflow, commit, and builder that produced it? GitHub's `attest-build-provenance` action answers exactly that, using the same OIDC identity mechanism as cosign signing (Lesson 11).
 
 ## Investigation steps
 

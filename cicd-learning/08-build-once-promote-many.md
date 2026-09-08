@@ -1,4 +1,4 @@
-# Lesson 07 — Build Once, Promote Many
+# Lesson 08 — Build Once, Promote Many
 
 **What you'll learn:** the single most important design decision in `release.yml`, and how to verify it's actually true rather than just claimed.
 

@@ -1,4 +1,4 @@
-# Lesson 13 — Releases, Environments, and Approvals
+# Lesson 14 — Releases, Environments, and Approvals
 
 **What you'll learn:** semantic versioning in brief, GitHub Environments and approvals conceptually, and this project's recommended (but not yet applied) branch protection settings.
 
@@ -42,7 +42,7 @@ PRODUCTION
 still sha256:e36d156c...
 ```
 
-This is Lesson 07's principle again, extended across environments rather than just within one workflow run.
+This is Lesson 08's principle again, extended across environments rather than just within one workflow run.
 
 ## GitHub Environments and approvals, conceptually
 
@@ -73,7 +73,7 @@ A manual trigger is itself a (lightweight) approval gate - someone has to active
 
 1. Why is "the same image digest gets promoted through every environment" specifically what makes an approval gate *meaningful*? What would an approval before "rebuild and deploy to production" actually be approving, if the rebuild could produce something subtly different from what was tested in staging?
 2. This project's release trigger is `workflow_dispatch` (plus a temporary tag - Lesson 01). Is that itself a form of "approval," in the sense this lesson describes? What's missing compared to a real GitHub Environment approval gate?
-3. If this project tagged a real `v1.0.0` release tomorrow, should that trigger a *new build*, or should it apply a new tag to the *already-published* digest from an existing successful run? Justify your answer from Lesson 07.
+3. If this project tagged a real `v1.0.0` release tomorrow, should that trigger a *new build*, or should it apply a new tag to the *already-published* digest from an existing successful run? Justify your answer from Lesson 08.
 
 ## Practical exercise
 
